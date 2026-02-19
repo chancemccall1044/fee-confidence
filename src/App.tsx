@@ -387,7 +387,10 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>Fee Confidence</h1>
 
-              {/* Version badge: keep aligned with release tagging */}
+              {/* ---------- Version Badge ----------
+   Displays build version sourced from package.json via Vite define (__APP_VERSION__).
+   DO NOT hardcode; version is injected at build time to prevent badge/release mismatch.
+*/}
               <div
                 style={{
                   padding: "4px 10px",
@@ -400,315 +403,314 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               >
                 v{__APP_VERSION__}
               </div>
-            </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {/* “who” is stored in localStorage and displayed for attribution */}
-              {who && (
-                <div style={{ fontSize: 14, color: "#6b7280" }}>
-                  Logged in as <b style={{ color: "#111827" }}>{who}</b>
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {/* “who” is stored in localStorage and displayed for attribution */}
+                {who && (
+                  <div style={{ fontSize: 14, color: "#6b7280" }}>
+                    Logged in as <b style={{ color: "#111827" }}>{who}</b>
+                  </div>
+                )}
 
-              <button
-                onClick={onLogout}
-                style={{
-                  height: 32,
-                  padding: "0 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                Logout
-              </button>
+                <button
+                  onClick={onLogout}
+                  style={{
+                    height: 32,
+                    padding: "0 12px",
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                    background: "white",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* ---------- Gold Output ----------
+          {/* ---------- Gold Output ----------
            Primary results card. Uses display (result OR lastGood) so the UI stays stable during invalid input edits.
         */}
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 16,
-            padding: 24,
-            background: "white",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-            marginTop: 24,
-          }}
-        >
-          {/* ---------- Summary Header ----------
-             Scenario title + high-level KPI tiles.
-          */}
-          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
-            <div>
-              <div style={{ fontSize: 14, color: "#6b7280" }}>Scenario</div>
-              <div style={{ fontSize: 24, fontWeight: 800 }}>{ui.scenarioName}</div>
-              <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
-                Contract Type: <b style={{ color: "#111827" }}>{result?.contract_type ?? ui.contractTypeName}</b> •
-                Rounding: <b style={{ color: "#111827" }}>{result?.meta.rounding ?? "HALF_AWAY_FROM_ZERO"}</b>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(200px, 1fr))", gap: 20 }}>
-              <Stat label="Derived Contract Value" value={show(display?.fee_analysis.derived_contract_value, money)} />
-              <Stat label="Total Cost" value={show(display?.cost_stack.total_cost, money)} />
-              <Stat label="Fee Dollars" value={show(display?.fee_analysis.fee_dollars, money)} />
-              <Stat label="Effective Margin" value={show(display?.fee_analysis.effective_margin_percent, pct)} />
-            </div>
-          </div>
-
-          {/* ---------- Narrative Block ----------
-             Human-readable interpretation of the results (shows guidance text until compute succeeds).
-          */}
-          <div
-            style={{
-              marginTop: 20,
-              padding: 14,
-              borderRadius: 12,
-              background: "#f3f4f6",
-              fontSize: 14,
-              color: "#111827",
-            }}
-          >
-            {result ? (
-              <>
-                Based on declared cost assumptions and a fee of <b>{show(result.fee_analysis.fee_percent, pct)}</b>,
-                the derived contract value is <b>{show(result.fee_analysis.derived_contract_value, money)}</b> with an
-                effective margin of <b>{show(result.fee_analysis.effective_margin_percent, pct)}</b>.
-              </>
-            ) : (
-              <>Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.</>
-            )}
-          </div>
-
-          {/* ---------- Detailed Tables ----------
-             Opacity reduces when stale (compute failed) but lastGood is being displayed.
-          */}
-          <div
-            style={{
-              opacity: isStale ? 0.35 : 1,
-              transition: "opacity 120ms ease",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 28,
-              marginTop: 28,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
-              <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
-              <Row label="Fringe Amount" code="FA" value={show(display?.cost_stack.fringe_amount, money)} />
-              <Row label="Overhead Amount" code="OA" value={show(display?.cost_stack.overhead_amount, money)} />
-              <Row
-                label="Fully Burdened Labor"
-                code="FBL"
-                value={show(display?.cost_stack.fully_burdened_labor, money)}
-                strong
-              />
-              <Row label="G&A Amount" code="GA" value={show(display?.cost_stack.gna_amount, money)} />
-              <Row label="Total Cost" code="TC" value={show(display?.cost_stack.total_cost, money)} strong />
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 800, marginBottom: 10 }}>Fee & Outcome</div>
-              <Row label="Fee Percent" code="FP" value={show(display?.fee_analysis.fee_percent, pct)} />
-              <Row label="Fee Dollars" code="FD" value={show(display?.fee_analysis.fee_dollars, money)} />
-              <Row
-                label="Derived Contract Value"
-                code="DCV"
-                value={show(display?.fee_analysis.derived_contract_value, money)}
-                strong
-              />
-              <Row
-                label="Effective Margin"
-                code="EM"
-                value={show(display?.fee_analysis.effective_margin_percent, pct)}
-                strong
-              />
-            </div>
-          </div>
-
-          {/* ---------- Canonical JSON Output ----------
-             Debug/traceability view of the computed CDOO.
-          */}
-          <details style={{ marginTop: 20 }}>
-            <summary style={{ cursor: result ? "pointer" : "not-allowed", opacity: result ? 1 : 0.6 }}>
-              show Canonical Output (CDOO JSON)
-            </summary>
-
-            {result ? (
-              <pre
-                style={{
-                  padding: 14,
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  background: "#fafafa",
-                  overflowX: "auto",
-                  marginTop: 10,
-                }}
-              >
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            ) : (
-              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-                Fix inputs to view CDOO output.
-              </div>
-            )}
-          </details>
-        </div>
-
-        {/* ---------- Assumptions & Inputs ----------
-           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.
-        */}
-        <details style={{ marginTop: 24 }}>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
-            Assumptions & Inputs
-          </summary>
-
-          {/* ---------- Error Banner ----------
-             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).
-          */}
-          {error && (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #fecaca",
-                background: "#fff1f2",
-                color: "#7f1d1d",
-                fontSize: 13,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              <b>Can’t compute:</b> {error}
-            </div>
-          )}
-
-          {/* ---------- Input Card ----------
-             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.
-          */}
           <div
             style={{
               border: "1px solid #e5e7eb",
               borderRadius: 16,
-              padding: 20,
+              padding: 24,
               background: "white",
               boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-              marginTop: 12,
+              marginTop: 24,
             }}
           >
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(260px, 1fr))", gap: 16 }}>
-              <Field label="Scenario Name">
-                <TextInput
-                  value={ui.scenarioName}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({
-                      ...prev,
-                      scenarioName: e.target.value,
-                    }))
-                  }
-                />
-              </Field>
+            {/* ---------- Summary Header ----------
+             Scenario title + high-level KPI tiles.
+          */}
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 14, color: "#6b7280" }}>Scenario</div>
+                <div style={{ fontSize: 24, fontWeight: 800 }}>{ui.scenarioName}</div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
+                  Contract Type: <b style={{ color: "#111827" }}>{result?.contract_type ?? ui.contractTypeName}</b> •
+                  Rounding: <b style={{ color: "#111827" }}>{result?.meta.rounding ?? "HALF_AWAY_FROM_ZERO"}</b>
+                </div>
+              </div>
 
-              <Field label="Contract Type">
-                <SelectInput
-                  value={ui.contractTypeName}
-                  onChange={(e) =>
-                    setUi((prev) => ({
-                      ...prev,
-                      contractTypeName: e.target.value as typeof prev.contractTypeName,
-                    }))
-                  }
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(200px, 1fr))", gap: 20 }}>
+                <Stat label="Derived Contract Value" value={show(display?.fee_analysis.derived_contract_value, money)} />
+                <Stat label="Total Cost" value={show(display?.cost_stack.total_cost, money)} />
+                <Stat label="Fee Dollars" value={show(display?.fee_analysis.fee_dollars, money)} />
+                <Stat label="Effective Margin" value={show(display?.fee_analysis.effective_margin_percent, pct)} />
+              </div>
+            </div>
+
+            {/* ---------- Narrative Block ----------
+             Human-readable interpretation of the results (shows guidance text until compute succeeds).
+          */}
+            <div
+              style={{
+                marginTop: 20,
+                padding: 14,
+                borderRadius: 12,
+                background: "#f3f4f6",
+                fontSize: 14,
+                color: "#111827",
+              }}
+            >
+              {result ? (
+                <>
+                  Based on declared cost assumptions and a fee of <b>{show(result.fee_analysis.fee_percent, pct)}</b>,
+                  the derived contract value is <b>{show(result.fee_analysis.derived_contract_value, money)}</b> with an
+                  effective margin of <b>{show(result.fee_analysis.effective_margin_percent, pct)}</b>.
+                </>
+              ) : (
+                <>Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.</>
+              )}
+            </div>
+
+            {/* ---------- Detailed Tables ----------
+             Opacity reduces when stale (compute failed) but lastGood is being displayed.
+          */}
+            <div
+              style={{
+                opacity: isStale ? 0.35 : 1,
+                transition: "opacity 120ms ease",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 28,
+                marginTop: 28,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
+                <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
+                <Row label="Fringe Amount" code="FA" value={show(display?.cost_stack.fringe_amount, money)} />
+                <Row label="Overhead Amount" code="OA" value={show(display?.cost_stack.overhead_amount, money)} />
+                <Row
+                  label="Fully Burdened Labor"
+                  code="FBL"
+                  value={show(display?.cost_stack.fully_burdened_labor, money)}
+                  strong
+                />
+                <Row label="G&A Amount" code="GA" value={show(display?.cost_stack.gna_amount, money)} />
+                <Row label="Total Cost" code="TC" value={show(display?.cost_stack.total_cost, money)} strong />
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800, marginBottom: 10 }}>Fee & Outcome</div>
+                <Row label="Fee Percent" code="FP" value={show(display?.fee_analysis.fee_percent, pct)} />
+                <Row label="Fee Dollars" code="FD" value={show(display?.fee_analysis.fee_dollars, money)} />
+                <Row
+                  label="Derived Contract Value"
+                  code="DCV"
+                  value={show(display?.fee_analysis.derived_contract_value, money)}
+                  strong
+                />
+                <Row
+                  label="Effective Margin"
+                  code="EM"
+                  value={show(display?.fee_analysis.effective_margin_percent, pct)}
+                  strong
+                />
+              </div>
+            </div>
+
+            {/* ---------- Canonical JSON Output ----------
+             Debug/traceability view of the computed CDOO.
+          */}
+            <details style={{ marginTop: 20 }}>
+              <summary style={{ cursor: result ? "pointer" : "not-allowed", opacity: result ? 1 : 0.6 }}>
+                show Canonical Output (CDOO JSON)
+              </summary>
+
+              {result ? (
+                <pre
+                  style={{
+                    padding: 14,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    background: "#fafafa",
+                    overflowX: "auto",
+                    marginTop: 10,
+                  }}
                 >
-                  <option value="CPFF">CPFF</option>
-                  <option value="TM">TM</option>
-                </SelectInput>
-              </Field>
-
-              <Field label="Direct Labor ($)">
-                <TextInput
-                  value={ui.directLabor}
-                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, directLabor: e.target.value }))}
-                  inputMode="decimal"
-                  invalid={invalid.directLabor}
-                />
-              </Field>
-
-              <Field label="Fringe (%)">
-                <TextInput
-                  value={ui.fringePct}
-                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, fringePct: e.target.value }))}
-                  inputMode="decimal"
-                  invalid={invalid.fringePct}
-                />
-              </Field>
-
-              <Field label="Overhead (%)">
-                <TextInput
-                  value={ui.overheadPct}
-                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, overheadPct: e.target.value }))}
-                  inputMode="decimal"
-                  invalid={invalid.overheadPct}
-                />
-              </Field>
-
-              <Field label="G&A (%)">
-                <TextInput
-                  value={ui.gnaPct}
-                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, gnaPct: e.target.value }))}
-                  inputMode="decimal"
-                  invalid={invalid.gnaPct}
-                />
-              </Field>
-
-              <Field label="Fee (%)">
-                <TextInput
-                  value={ui.feePct}
-                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, feePct: e.target.value }))}
-                  inputMode="decimal"
-                  invalid={invalid.feePct}
-                />
-              </Field>
-            </div>
-
-            <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
-              Inputs are CDIO v1.1 fields. Percent inputs are converted to decimals for canonical calculation.
-            </div>
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              ) : (
+                <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+                  Fix inputs to view CDOO output.
+                </div>
+              )}
+            </details>
           </div>
-        </details>
+
+          {/* ---------- Assumptions & Inputs ----------
+           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.
+        */}
+          <details style={{ marginTop: 24 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
+              Assumptions & Inputs
+            </summary>
+
+            {/* ---------- Error Banner ----------
+             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).
+          */}
+            {error && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  borderRadius: 12,
+                  border: "1px solid #fecaca",
+                  background: "#fff1f2",
+                  color: "#7f1d1d",
+                  fontSize: 13,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                <b>Can’t compute:</b> {error}
+              </div>
+            )}
+
+            {/* ---------- Input Card ----------
+             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.
+          */}
+            <div
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 16,
+                padding: 20,
+                background: "white",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                marginTop: 12,
+              }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(260px, 1fr))", gap: 16 }}>
+                <Field label="Scenario Name">
+                  <TextInput
+                    value={ui.scenarioName}
+                    onChange={(e) =>
+                      setUi((prev: ScenarioUI) => ({
+                        ...prev,
+                        scenarioName: e.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <Field label="Contract Type">
+                  <SelectInput
+                    value={ui.contractTypeName}
+                    onChange={(e) =>
+                      setUi((prev) => ({
+                        ...prev,
+                        contractTypeName: e.target.value as typeof prev.contractTypeName,
+                      }))
+                    }
+                  >
+                    <option value="CPFF">CPFF</option>
+                    <option value="TM">TM</option>
+                  </SelectInput>
+                </Field>
+
+                <Field label="Direct Labor ($)">
+                  <TextInput
+                    value={ui.directLabor}
+                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, directLabor: e.target.value }))}
+                    inputMode="decimal"
+                    invalid={invalid.directLabor}
+                  />
+                </Field>
+
+                <Field label="Fringe (%)">
+                  <TextInput
+                    value={ui.fringePct}
+                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, fringePct: e.target.value }))}
+                    inputMode="decimal"
+                    invalid={invalid.fringePct}
+                  />
+                </Field>
+
+                <Field label="Overhead (%)">
+                  <TextInput
+                    value={ui.overheadPct}
+                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, overheadPct: e.target.value }))}
+                    inputMode="decimal"
+                    invalid={invalid.overheadPct}
+                  />
+                </Field>
+
+                <Field label="G&A (%)">
+                  <TextInput
+                    value={ui.gnaPct}
+                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, gnaPct: e.target.value }))}
+                    inputMode="decimal"
+                    invalid={invalid.gnaPct}
+                  />
+                </Field>
+
+                <Field label="Fee (%)">
+                  <TextInput
+                    value={ui.feePct}
+                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, feePct: e.target.value }))}
+                    inputMode="decimal"
+                    invalid={invalid.feePct}
+                  />
+                </Field>
+              </div>
+
+              <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
+                Inputs are CDIO v1.1 fields. Percent inputs are converted to decimals for canonical calculation.
+              </div>
+            </div>
+          </details>
+        </div>
       </div>
-    </div>
-  );
+      );
 }
 
-/* ---------- App Root ----------
-   Owns browser storage + unlock gating, then renders AuthedApp when unlocked.
-*/
-/**
- * Root App component.
- *
- * Storage keys:
- * - sessionStorage: fc_unlocked (string "1") — session-only gate
- * - localStorage:   fc_who      (string)     — persists identity across sessions
- *
- * DO NOT TREAT THIS AS SECURITY:
- * - This is a lightweight internal friction gate only.
- */
-export default function App() {
+      /* ---------- App Root ----------
+         Owns browser storage + unlock gating, then renders AuthedApp when unlocked.
+      */
+      /**
+       * Root App component.
+       *
+       * Storage keys:
+       * - sessionStorage: fc_unlocked (string "1") — session-only gate
+       * - localStorage:   fc_who      (string)     — persists identity across sessions
+       *
+       * DO NOT TREAT THIS AS SECURITY:
+       * - This is a lightweight internal friction gate only.
+       */
+      export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("fc_unlocked") === "1");
   const [who, setWho] = useState(() => localStorage.getItem("fc_who") ?? "");
 
-  /* ---------- Gate ----------
-     Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
-  */
-  if (!unlocked) {
+      /* ---------- Gate ----------
+         Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
+      */
+      if (!unlocked) {
     return (
       <PasscodeGate
         onUnlock={(whoName) => {
@@ -718,19 +720,19 @@ export default function App() {
           setUnlocked(true);
         }}
       />
-    );
+      );
   }
 
-  /* ---------- Main App ----------
-     Renders the authed application; logout clears session unlock only.
-  */
-  return (
-    <AuthedApp
-      who={who}
-      onLogout={() => {
-        sessionStorage.removeItem("fc_unlocked");
-        setUnlocked(false);
-      }}
-    />
-  );
+      /* ---------- Main App ----------
+         Renders the authed application; logout clears session unlock only.
+      */
+      return (
+      <AuthedApp
+        who={who}
+        onLogout={() => {
+          sessionStorage.removeItem("fc_unlocked");
+          setUnlocked(false);
+        }}
+      />
+      );
 }
