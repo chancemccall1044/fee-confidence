@@ -278,7 +278,14 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
   };
 
   return (
-    <div style={{ padding: 32, fontFamily: "system-ui, sans-serif", background: "#f9fafb" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f9fafb",
+        padding: "32px 20px",
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
       <div style={{ width: "100%", maxWidth: 1000, margin: "0 auto" }}>
         {/* App header (NOT part of export card) */}
         <div
@@ -304,7 +311,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                   color: "#3730a3",
                 }}
               >
-                v1.0.1
+                v1.1.0
               </div>
             </div>
 
@@ -345,23 +352,6 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
             marginTop: 24,
           }}
         >
-          {/* Error banner */}
-          {error && (
-            <div
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #fecaca",
-                background: "#fff1f2",
-                color: "#7f1d1d",
-                fontSize: 13,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              <b>Can’t compute:</b> {error}
-            </div>
-          )}
 
           {/* ... keep your existing Gold Output content here ... */}
           {/* Header Section */}
@@ -474,7 +464,23 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
             Assumptions & Inputs
           </summary>
-
+          {/* Error banner */}
+          {error && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid #fecaca",
+                background: "#fff1f2",
+                color: "#7f1d1d",
+                fontSize: 13,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              <b>Can’t compute:</b> {error}
+            </div>
+          )}
           <div
             style={{
               border: "1px solid #e5e7eb",
