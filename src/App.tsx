@@ -4,19 +4,27 @@ import { useComputedScenario } from "./features/feeConfidence/hooks/useComputedS
 import { percentToDecimalString } from "./features/feeConfidence/converters/percent";
 import type { CDIOv11 } from "./truthEngine";
 
+/* ---------- App Constants ----------
+   Local friction gate for internal use only (NOT authentication/authorization).
+*/
 const APP_PASSCODE = "honkytonky";
 
-/* ---------- Format Helpers ---------- */
-
+/* ---------- Format Helpers ----------
+   Pure display helpers for rendering values in the UI; do not use these for compute.
+*/
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(n);
 
-const pct = (decimal: number) =>
-  `${(decimal * 100).toFixed(2)}%`;
+const pct = (decimal: number) => `${(decimal * 100).toFixed(2)}%`;
 
+/**
+ * Safe UI formatting helper.
+ * - When result is null/undefined, returns empty string so UI can render cleanly.
+ * - Keeps display logic centralized (prevents repeated null checks everywhere).
+ */
 const show = <T,>(
   result: T | null | undefined,
   formatter: (value: T) => string
@@ -24,25 +32,52 @@ const show = <T,>(
   return result != null ? formatter(result) : "";
 };
 
-/* ---------- UI Components ---------- */
-function PasscodeGate({
-  onUnlock,
-}: {
-  onUnlock: (who: string) => void;
-}) {
+/* ---------- PasscodeGate ----------
+   Lightweight “keep honest people honest” gate; stores unlock + identity in browser storage.
+*/
+/**
+ * Passcode-only entry screen.
+ *
+ * Side effects:
+ * - None in this component directly; storage writes occur in App() onUnlock handler.
+ *
+ * UX notes:
+ * - Allows pressing Enter in the passcode field to submit.
+ * - Requires "who" for attribution/traceability in screenshots and shared outputs.
+ */
+function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
   const [pass, setPass] = useState("");
   const [who, setWho] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f9fafb", padding: 24 }}>
-      <div style={{ width: "100%", maxWidth: 420, background: "white", border: "1px solid #e5e7eb", borderRadius: 16, padding: 20, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "#f9fafb",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "white",
+          border: "1px solid #e5e7eb",
+          borderRadius: 16,
+          padding: 20,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+        }}
+      >
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Fee Confidence</div>
         <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>
           Enter passcode to continue.
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
+          {/* Identity input (UI-only; stored by parent on unlock) */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Name</div>
             <input
@@ -53,6 +88,7 @@ function PasscodeGate({
             />
           </div>
 
+          {/* Passcode input (Enter-to-submit supported) */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Passcode</div>
             <input
@@ -64,7 +100,7 @@ function PasscodeGate({
                 height: 40,
                 padding: "0 12px",
                 borderRadius: 10,
-                border: `1px solid ${err ? "#fca5a5" : "#e5e7eb"}`
+                border: `1px solid ${err ? "#fca5a5" : "#e5e7eb"}`,
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -86,8 +122,10 @@ function PasscodeGate({
             />
           </div>
 
+          {/* Inline validation error */}
           {err && <div style={{ fontSize: 12, color: "#7f1d1d" }}>{err}</div>}
 
+          {/* Explicit unlock button (same validation as Enter-to-submit) */}
           <button
             onClick={() => {
               if (pass !== APP_PASSCODE) {
@@ -102,7 +140,14 @@ function PasscodeGate({
 
               onUnlock(who.trim());
             }}
-            style={{ height: 40, borderRadius: 10, border: "1px solid #e5e7eb", background: "#111827", color: "white", fontWeight: 700 }}
+            style={{
+              height: 40,
+              borderRadius: 10,
+              border: "1px solid #e5e7eb",
+              background: "#111827",
+              color: "white",
+              fontWeight: 700,
+            }}
           >
             Unlock
           </button>
@@ -112,9 +157,11 @@ function PasscodeGate({
   );
 }
 
+/* ---------- UI Primitives ----------
+   Small reusable components used to keep the main render tree readable.
+*/
 
-/* ---------- UI Components ---------- */
-
+/** Small metric tile used in the “Gold Output” header. */
 const Stat = ({ label, value }: { label: string; value: string }) => (
   <div style={{ display: "grid", gap: 4 }}>
     <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
@@ -122,14 +169,20 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
+/** Label + input wrapper used for consistent spacing and typography in the assumptions panel. */
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <div style={{ display: "grid", gap: 6 }}>
     <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{label}</div>
     {children}
   </div>
 );
+
 type SelectInputProps = React.ComponentProps<"select"> & { invalid?: boolean };
 
+/**
+ * Styled select input with invalid state highlighting.
+ * Note: Uses inline focus/blur handlers to keep styling predictable without a CSS framework.
+ */
 const SelectInput = ({ invalid, ...props }: SelectInputProps) => (
   <select
     {...props}
@@ -147,9 +200,7 @@ const SelectInput = ({ invalid, ...props }: SelectInputProps) => (
       display: "block",
       boxSizing: "border-box",
       ...(props.style ?? {}),
-    }
-    }
-
+    }}
     onFocus={(e) => {
       e.currentTarget.style.borderColor = "#c7d2fe";
       e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
@@ -160,10 +211,13 @@ const SelectInput = ({ invalid, ...props }: SelectInputProps) => (
       e.currentTarget.style.boxShadow = invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none";
       props.onBlur?.(e);
     }}
-
   />
 );
 
+/**
+ * Styled text input with invalid state highlighting.
+ * Note: invalid is purely UI validation (parseable check), not canonical CDIO validation.
+ */
 const TextInput = ({
   invalid,
   ...props
@@ -193,10 +247,10 @@ const TextInput = ({
       e.currentTarget.style.boxShadow = invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none";
       props.onBlur?.(e);
     }}
-
   />
 );
 
+/** Labeled line item used in the cost stack and fee outcome sections. */
 const Row = ({
   label,
   code,
@@ -230,12 +284,28 @@ const Row = ({
   </div>
 );
 
-
-/* ---------- App ---------- */
-
+/* ---------- AuthedApp ----------
+   Main application UI rendered only after “unlocked” gate; owns ScenarioUI state and compute integration.
+*/
+/**
+ * Main Fee Confidence UI shell.
+ *
+ * Responsibilities:
+ * - Holds ScenarioUI state (string-based UI model).
+ * - Converts ScenarioUI → canonical CDIOv11 (decimals, types, ids).
+ * - Calls useComputedScenario to compute CDOO and manage stale/lastGood display behavior.
+ * - Renders results (“Gold Output”) + inputs (“Assumptions & Inputs”).
+ */
 function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
+  /* ---------- Scenario UI State ----------
+     UI values are strings to preserve the raw user input while editing.
+  */
   const [ui, setUi] = useState<ScenarioUI>(defaultScenarioUI);
 
+  /* ---------- UI → Canonical CDIO Mapping ----------
+     Converts UI strings into canonical inputs for Truth Engine.
+     DO NOT add math here — keep compute logic inside truthEngine.ts.
+  */
   const cdio = useMemo<CDIOv11>(() => {
     return {
       cdio_version: "1.1",
@@ -261,8 +331,15 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
     ui.contractTypeName,
   ]);
 
+  /* ---------- Compute Integration ----------
+     Computes CDOO and provides safe fallback display when inputs temporarily become invalid.
+  */
   const { result, error, display, isStale } = useComputedScenario(cdio);
 
+  /* ---------- UI Validation (Parseability Only) ----------
+     Simple guardrails to prevent obvious invalid inputs (empty, non-numeric).
+     Canonical validation still lives in Truth Engine and can throw.
+  */
   const isParseableNumber = (s: string) => {
     const cleaned = s.trim().replace(/\$/g, "").replace(/,/g, "");
     if (cleaned === "") return false;
@@ -277,6 +354,12 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
     feePct: !isParseableNumber(ui.feePct),
   };
 
+  /* ---------- Render ----------
+     Layout is split into:
+     1) Header (title, version, identity, logout)
+     2) Gold Output (computed narrative + tables + JSON)
+     3) Assumptions & Inputs (collapsible editing panel + error banner)
+  */
   return (
     <div
       style={{
@@ -287,7 +370,9 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
       }}
     >
       <div style={{ width: "100%", maxWidth: 1000, margin: "0 auto" }}>
-        {/* App header (NOT part of export card) */}
+        {/* ---------- Header Card ----------
+           Shows app identity + version + who is logged in. Not included in exported output.
+        */}
         <div
           style={{
             border: "1px solid #e5e7eb",
@@ -301,6 +386,8 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>Fee Confidence</h1>
+
+              {/* Version badge: keep aligned with release tagging */}
               <div
                 style={{
                   padding: "4px 10px",
@@ -311,11 +398,12 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                   color: "#3730a3",
                 }}
               >
-                v1.1.0
+                v{__APP_VERSION__}
               </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {/* “who” is stored in localStorage and displayed for attribution */}
               {who && (
                 <div style={{ fontSize: 14, color: "#6b7280" }}>
                   Logged in as <b style={{ color: "#111827" }}>{who}</b>
@@ -341,7 +429,9 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           </div>
         </div>
 
-        {/* ---------- Gold Output ---------- */}
+        {/* ---------- Gold Output ----------
+           Primary results card. Uses display (result OR lastGood) so the UI stays stable during invalid input edits.
+        */}
         <div
           style={{
             border: "1px solid #e5e7eb",
@@ -352,9 +442,9 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
             marginTop: 24,
           }}
         >
-
-          {/* ... keep your existing Gold Output content here ... */}
-          {/* Header Section */}
+          {/* ---------- Summary Header ----------
+             Scenario title + high-level KPI tiles.
+          */}
           <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
             <div>
               <div style={{ fontSize: 14, color: "#6b7280" }}>Scenario</div>
@@ -373,7 +463,9 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
             </div>
           </div>
 
-          {/* Narrative Block */}
+          {/* ---------- Narrative Block ----------
+             Human-readable interpretation of the results (shows guidance text until compute succeeds).
+          */}
           <div
             style={{
               marginTop: 20,
@@ -391,14 +483,23 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 effective margin of <b>{show(result.fee_analysis.effective_margin_percent, pct)}</b>.
               </>
             ) : (
-              <>
-                Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.
-              </>
+              <>Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.</>
             )}
           </div>
 
-          {/* Cost & Fee Sections */}
-          <div style={{ opacity: isStale ? 0.35 : 1, transition: "opacity 120ms ease", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, marginTop: 28 }}>
+          {/* ---------- Detailed Tables ----------
+             Opacity reduces when stale (compute failed) but lastGood is being displayed.
+          */}
+          <div
+            style={{
+              opacity: isStale ? 0.35 : 1,
+              transition: "opacity 120ms ease",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 28,
+              marginTop: 28,
+            }}
+          >
             <div>
               <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
               <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
@@ -431,13 +532,16 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 strong
               />
             </div>
-
           </div>
-          {/* JSON Toggle */}
+
+          {/* ---------- Canonical JSON Output ----------
+             Debug/traceability view of the computed CDOO.
+          */}
           <details style={{ marginTop: 20 }}>
             <summary style={{ cursor: result ? "pointer" : "not-allowed", opacity: result ? 1 : 0.6 }}>
               show Canonical Output (CDOO JSON)
             </summary>
+
             {result ? (
               <pre
                 style={{
@@ -459,12 +563,17 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           </details>
         </div>
 
-        {/* ---------- Assumptions (Input Controls) ---------- */}
+        {/* ---------- Assumptions & Inputs ----------
+           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.
+        */}
         <details style={{ marginTop: 24 }}>
           <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
             Assumptions & Inputs
           </summary>
-          {/* Error banner */}
+
+          {/* ---------- Error Banner ----------
+             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).
+          */}
           {error && (
             <div
               style={{
@@ -481,6 +590,10 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <b>Can’t compute:</b> {error}
             </div>
           )}
+
+          {/* ---------- Input Card ----------
+             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.
+          */}
           <div
             style={{
               border: "1px solid #e5e7eb",
@@ -519,13 +632,10 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 </SelectInput>
               </Field>
 
-
               <Field label="Direct Labor ($)">
                 <TextInput
                   value={ui.directLabor}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({ ...prev, directLabor: e.target.value }))
-                  }
+                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, directLabor: e.target.value }))}
                   inputMode="decimal"
                   invalid={invalid.directLabor}
                 />
@@ -534,9 +644,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <Field label="Fringe (%)">
                 <TextInput
                   value={ui.fringePct}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({ ...prev, fringePct: e.target.value }))
-                  }
+                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, fringePct: e.target.value }))}
                   inputMode="decimal"
                   invalid={invalid.fringePct}
                 />
@@ -545,9 +653,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <Field label="Overhead (%)">
                 <TextInput
                   value={ui.overheadPct}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({ ...prev, overheadPct: e.target.value }))
-                  }
+                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, overheadPct: e.target.value }))}
                   inputMode="decimal"
                   invalid={invalid.overheadPct}
                 />
@@ -556,9 +662,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <Field label="G&A (%)">
                 <TextInput
                   value={ui.gnaPct}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({ ...prev, gnaPct: e.target.value }))
-                  }
+                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, gnaPct: e.target.value }))}
                   inputMode="decimal"
                   invalid={invalid.gnaPct}
                 />
@@ -567,9 +671,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <Field label="Fee (%)">
                 <TextInput
                   value={ui.feePct}
-                  onChange={(e) =>
-                    setUi((prev: ScenarioUI) => ({ ...prev, feePct: e.target.value }))
-                  }
+                  onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, feePct: e.target.value }))}
                   inputMode="decimal"
                   invalid={invalid.feePct}
                 />
@@ -586,10 +688,26 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
   );
 }
 
+/* ---------- App Root ----------
+   Owns browser storage + unlock gating, then renders AuthedApp when unlocked.
+*/
+/**
+ * Root App component.
+ *
+ * Storage keys:
+ * - sessionStorage: fc_unlocked (string "1") — session-only gate
+ * - localStorage:   fc_who      (string)     — persists identity across sessions
+ *
+ * DO NOT TREAT THIS AS SECURITY:
+ * - This is a lightweight internal friction gate only.
+ */
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("fc_unlocked") === "1");
   const [who, setWho] = useState(() => localStorage.getItem("fc_who") ?? "");
 
+  /* ---------- Gate ----------
+     Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
+  */
   if (!unlocked) {
     return (
       <PasscodeGate
@@ -603,6 +721,9 @@ export default function App() {
     );
   }
 
+  /* ---------- Main App ----------
+     Renders the authed application; logout clears session unlock only.
+  */
   return (
     <AuthedApp
       who={who}
@@ -613,4 +734,3 @@ export default function App() {
     />
   );
 }
-
