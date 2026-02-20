@@ -3,6 +3,9 @@ import { defaultScenarioUI, type ScenarioUI } from "./features/feeConfidence/mod
 import { useComputedScenario } from "./features/feeConfidence/hooks/useComputedScenario";
 import { percentToDecimalString } from "./features/feeConfidence/converters/percent";
 import type { CDIOv11 } from "./truthEngine";
+import { useScenarioSet } from "./features/feeConfidenceCompare/hooks/useScenarioSet";
+import { useScenarioCompare } from "./features/feeConfidenceCompare/hooks/useScenarioCompare";
+import { CompareTable } from "./features/feeConfidenceCompare/ui/compareTable";
 
 /* ---------- App Constants ----------
    Local friction gate for internal use only (NOT authentication/authorization).
@@ -331,11 +334,14 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
     ui.contractTypeName,
   ]);
 
+
   /* ---------- Compute Integration ----------
      Computes CDOO and provides safe fallback display when inputs temporarily become invalid.
   */
+  const scenarioSet = useScenarioSet({ who, cdio });
+  const { envelopes, slots, addSlot, removeSlot } = scenarioSet;
+  const { view } = useScenarioCompare(envelopes);
   const { result, error, display, isStale } = useComputedScenario(cdio);
-
   /* ---------- UI Validation (Parseability Only) ----------
      Simple guardrails to prevent obvious invalid inputs (empty, non-numeric).
      Canonical validation still lives in Truth Engine and can throw.
@@ -345,6 +351,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
     if (cleaned === "") return false;
     return Number.isFinite(Number(cleaned));
   };
+
 
   const invalid = {
     directLabor: !isParseableNumber(ui.directLabor),
@@ -388,9 +395,8 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>Fee Confidence</h1>
 
               {/* ---------- Version Badge ----------
-   Displays build version sourced from package.json via Vite define (__APP_VERSION__).
-   DO NOT hardcode; version is injected at build time to prevent badge/release mismatch.
-*/}
+              Displays build version sourced from package.json via Vite define (__APP_VERSION__).
+              DO NOT hardcode; version is injected at build time to prevent badge/release mismatch.*/}
               <div
                 style={{
                   padding: "4px 10px",
@@ -404,13 +410,90 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 v{__APP_VERSION__}
               </div>
 
+              {/* Right: identity + scenario controls + logout */}
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {/* “who” is stored in localStorage and displayed for attribution */}
                 {who && (
                   <div style={{ fontSize: 14, color: "#6b7280" }}>
                     Logged in as <b style={{ color: "#111827" }}>{who}</b>
                   </div>
                 )}
+
+                {/* Scenario controls */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {!slots.includes("B") && (
+                    <button
+                      onClick={() => addSlot("B")}
+                      style={{
+                        height: 32,
+                        padding: "0 10px",
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        background: "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      + B
+                    </button>
+                  )}
+
+                  {!slots.includes("C") && slots.includes("B") && (
+                    <button
+                      onClick={() => addSlot("C")}
+                      style={{
+                        height: 32,
+                        padding: "0 10px",
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        background: "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      + C
+                    </button>
+                  )}
+
+                  {slots.includes("C") && (
+                    <button
+                      onClick={() => removeSlot("C")}
+                      style={{
+                        height: 32,
+                        padding: "0 10px",
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        background: "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#7f1d1d",
+                      }}
+                    >
+                      − C
+                    </button>
+                  )}
+
+                  {slots.includes("B") && !slots.includes("C") && (
+                    <button
+                      onClick={() => removeSlot("B")}
+                      style={{
+                        height: 32,
+                        padding: "0 10px",
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                        background: "white",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#7f1d1d",
+                      }}
+                    >
+                      − B
+                    </button>
+                  )}
+                </div>
 
                 <button
                   onClick={onLogout}
@@ -429,6 +512,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 </button>
               </div>
             </div>
+
           </div>
 
           {/* ---------- Gold Output ----------
@@ -489,56 +573,58 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               )}
             </div>
 
-            {/* ---------- Detailed Tables ----------
-             Opacity reduces when stale (compute failed) but lastGood is being displayed.
-          */}
-            <div
-              style={{
-                opacity: isStale ? 0.35 : 1,
-                transition: "opacity 120ms ease",
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 28,
-                marginTop: 28,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
-                <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
-                <Row label="Fringe Amount" code="FA" value={show(display?.cost_stack.fringe_amount, money)} />
-                <Row label="Overhead Amount" code="OA" value={show(display?.cost_stack.overhead_amount, money)} />
-                <Row
-                  label="Fully Burdened Labor"
-                  code="FBL"
-                  value={show(display?.cost_stack.fully_burdened_labor, money)}
-                  strong
-                />
-                <Row label="G&A Amount" code="GA" value={show(display?.cost_stack.gna_amount, money)} />
-                <Row label="Total Cost" code="TC" value={show(display?.cost_stack.total_cost, money)} strong />
-              </div>
+            {/* ---------- Detailed Tables ---------- */}
+            {slots.length === 1 ? (
+              <div
+                style={{
+                  opacity: isStale ? 0.35 : 1,
+                  transition: "opacity 120ms ease",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 28,
+                  marginTop: 28,
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
+                  <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
+                  <Row label="Fringe Amount" code="FA" value={show(display?.cost_stack.fringe_amount, money)} />
+                  <Row label="Overhead Amount" code="OA" value={show(display?.cost_stack.overhead_amount, money)} />
+                  <Row
+                    label="Fully Burdened Labor"
+                    code="FBL"
+                    value={show(display?.cost_stack.fully_burdened_labor, money)}
+                    strong
+                  />
+                  <Row label="G&A Amount" code="GA" value={show(display?.cost_stack.gna_amount, money)} />
+                  <Row label="Total Cost" code="TC" value={show(display?.cost_stack.total_cost, money)} strong />
+                </div>
 
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 10 }}>Fee & Outcome</div>
-                <Row label="Fee Percent" code="FP" value={show(display?.fee_analysis.fee_percent, pct)} />
-                <Row label="Fee Dollars" code="FD" value={show(display?.fee_analysis.fee_dollars, money)} />
-                <Row
-                  label="Derived Contract Value"
-                  code="DCV"
-                  value={show(display?.fee_analysis.derived_contract_value, money)}
-                  strong
-                />
-                <Row
-                  label="Effective Margin"
-                  code="EM"
-                  value={show(display?.fee_analysis.effective_margin_percent, pct)}
-                  strong
-                />
+                <div>
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Fee & Outcome</div>
+                  <Row label="Fee Percent" code="FP" value={show(display?.fee_analysis.fee_percent, pct)} />
+                  <Row label="Fee Dollars" code="FD" value={show(display?.fee_analysis.fee_dollars, money)} />
+                  <Row
+                    label="Derived Contract Value"
+                    code="DCV"
+                    value={show(display?.fee_analysis.derived_contract_value, money)}
+                    strong
+                  />
+                  <Row
+                    label="Effective Margin"
+                    code="EM"
+                    value={show(display?.fee_analysis.effective_margin_percent, pct)}
+                    strong
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <CompareTable view={view} money={money} pct={pct} />
+            )}
+
 
             {/* ---------- Canonical JSON Output ----------
-             Debug/traceability view of the computed CDOO.
-          */}
+             Debug/traceability view of the computed CDOO.*/}
             <details style={{ marginTop: 20 }}>
               <summary style={{ cursor: result ? "pointer" : "not-allowed", opacity: result ? 1 : 0.6 }}>
                 show Canonical Output (CDOO JSON)
@@ -566,16 +652,14 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           </div>
 
           {/* ---------- Assumptions & Inputs ----------
-           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.
-        */}
+           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.*/}
           <details style={{ marginTop: 24 }}>
             <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
               Assumptions & Inputs
             </summary>
 
             {/* ---------- Error Banner ----------
-             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).
-          */}
+             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).*/}
             {error && (
               <div
                 style={{
@@ -594,8 +678,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
             )}
 
             {/* ---------- Input Card ----------
-             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.
-          */}
+             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.*/}
             <div
               style={{
                 border: "1px solid #e5e7eb",
@@ -687,30 +770,33 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           </details>
         </div>
       </div>
-      );
+    </div>
+  );
 }
 
-      /* ---------- App Root ----------
+/* ---------- App Root ---------- ...
+ 
          Owns browser storage + unlock gating, then renders AuthedApp when unlocked.
       */
-      /**
-       * Root App component.
-       *
-       * Storage keys:
-       * - sessionStorage: fc_unlocked (string "1") — session-only gate
-       * - localStorage:   fc_who      (string)     — persists identity across sessions
-       *
-       * DO NOT TREAT THIS AS SECURITY:
-       * - This is a lightweight internal friction gate only.
-       */
-      export default function App() {
+/**
+ * Root App component.
+ *
+ * Storage keys:
+ * - sessionStorage: fc_unlocked (string "1") — session-only gate
+ * - localStorage:   fc_who      (string)     — persists identity across sessions
+ *
+ * DO NOT TREAT THIS AS SECURITY:
+ * - This is a lightweight internal friction gate only.
+ */
+export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("fc_unlocked") === "1");
   const [who, setWho] = useState(() => localStorage.getItem("fc_who") ?? "");
 
-      /* ---------- Gate ----------
-         Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
-      */
-      if (!unlocked) {
+
+  /* ---------- Gate ----------
+     Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
+  */
+  if (!unlocked) {
     return (
       <PasscodeGate
         onUnlock={(whoName) => {
@@ -720,19 +806,19 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           setUnlocked(true);
         }}
       />
-      );
+    );
   }
 
-      /* ---------- Main App ----------
-         Renders the authed application; logout clears session unlock only.
-      */
-      return (
-      <AuthedApp
-        who={who}
-        onLogout={() => {
-          sessionStorage.removeItem("fc_unlocked");
-          setUnlocked(false);
-        }}
-      />
-      );
+  /* ---------- Main App ----------
+     Renders the authed application; logout clears session unlock only.
+  */
+  return (
+    <AuthedApp
+      who={who}
+      onLogout={() => {
+        sessionStorage.removeItem("fc_unlocked");
+        setUnlocked(false);
+      }}
+    />
+  );
 }
