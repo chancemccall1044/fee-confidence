@@ -304,7 +304,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
      UI values are strings to preserve the raw user input while editing.
   */
   const [ui, setUi] = useState<ScenarioUI>(defaultScenarioUI);
-
+  const [activeSlot, setActiveSlot] = useState<"A" | "B" | "C">("A");
   /* ---------- UI → Canonical CDIO Mapping ----------
      Converts UI strings into canonical inputs for Truth Engine.
      DO NOT add math here — keep compute logic inside truthEngine.ts.
@@ -339,7 +339,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
      Computes CDOO and provides safe fallback display when inputs temporarily become invalid.
   */
   const scenarioSet = useScenarioSet({ who, cdio });
-  const { envelopes, slots, addSlot, removeSlot } = scenarioSet;
+  const { envelopes, slots, addSlot, removeSlot, updateEnvelopeUI } = scenarioSet;
   const { view } = useScenarioCompare(envelopes);
   const { result, error, display, isStale } = useComputedScenario(cdio);
   /* ---------- UI Validation (Parseability Only) ----------
@@ -352,6 +352,32 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
     return Number.isFinite(Number(cleaned));
   };
 
+  const normalizeName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+  // Active envelope selection (safe even if B/C removed)
+  const activeEnvelope =
+    envelopes.find((e) => e.slot === activeSlot) ?? envelopes[0];
+
+  const effectiveActiveSlot = activeEnvelope.slot;
+
+  // Name uniqueness validation (across active envelopes)
+  const getScenarioNameError = (name: string, selfSlot: string) => {
+    const key = normalizeName(name);
+    if (!key) return "Scenario name is required.";
+
+    const conflict = envelopes.find(
+      (e) => e.slot !== selfSlot && normalizeName(e.ui.scenarioName) === key
+    );
+
+    return conflict
+      ? `Scenario name must be unique (conflicts with Scenario ${conflict.slot}).`
+      : null;
+  };
+
+  const nameError = getScenarioNameError(
+    activeEnvelope.ui.scenarioName,
+    effectiveActiveSlot
+  );
 
   const invalid = {
     directLabor: !isParseableNumber(ui.directLabor),
@@ -423,6 +449,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                   {!slots.includes("B") && (
                     <button
                       onClick={() => addSlot("B")}
+                      disabled={!!nameError}
                       style={{
                         height: 32,
                         padding: "0 10px",
@@ -432,6 +459,8 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                         cursor: "pointer",
                         fontSize: 12,
                         fontWeight: 700,
+                        opacity: nameError ? 0.5 : 1,
+                        cursor: nameError ? "not-allowed" : "pointer",
                       }}
                     >
                       + B
@@ -441,6 +470,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                   {!slots.includes("C") && slots.includes("B") && (
                     <button
                       onClick={() => addSlot("C")}
+                      disabled={!!nameError}
                       style={{
                         height: 32,
                         padding: "0 10px",
@@ -450,6 +480,8 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                         cursor: "pointer",
                         fontSize: 12,
                         fontWeight: 700,
+                        opacity: nameError ? 0.5 : 1,
+                        cursor: nameError ? "not-allowed" : "pointer",
                       }}
                     >
                       + C
@@ -692,14 +724,23 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(260px, 1fr))", gap: 16 }}>
                 <Field label="Scenario Name">
                   <TextInput
-                    value={ui.scenarioName}
-                    onChange={(e) =>
-                      setUi((prev: ScenarioUI) => ({
-                        ...prev,
-                        scenarioName: e.target.value,
-                      }))
-                    }
+                    value={activeEnvelope.ui.scenarioName}
+                    onChange={(e) => {
+                      const v = e.target.value;
+
+                      // Update envelope (used for uniqueness + compare)
+                      updateEnvelopeUI(effectiveActiveSlot, { scenarioName: v });
+
+                      // Update main UI (used for CDIO scenario_id + header display)
+                      setUi((prev) => ({ ...prev, scenarioName: v }));
+                    }}
                   />
+
+                  {nameError && (
+                    <div style={{ fontSize: 12, color: "#7f1d1d", marginTop: 6 }}>
+                      {nameError}
+                    </div>
+                  )}
                 </Field>
 
                 <Field label="Contract Type">
