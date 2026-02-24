@@ -1,53 +1,41 @@
-import { useMemo, useState, type ReactNode, type InputHTMLAttributes } from "react";
+/**
+ * LOCKED: v1.2.x — Scenario name uniqueness validation
+ * - Scenario name stored on ScenarioEnvelope.ui.scenarioName
+ * - Active envelope selection safe (A/B/C)
+ * - Add B/C disabled when nameError exists
+ * - Uniqueness check normalizes whitespace + case
+ *
+ * Next work should happen in v1.3.x branch/copy.
+ */
+import { useMemo, useState } from "react";
 import { defaultScenarioUI, type ScenarioUI } from "./features/feeConfidence/model/ScenarioUI";
 import { useComputedScenario } from "./features/feeConfidence/hooks/useComputedScenario";
 import { percentToDecimalString } from "./features/feeConfidence/converters/percent";
 import type { CDIOv11 } from "./truthEngine";
 import { useScenarioSet } from "./features/feeConfidenceCompare/hooks/useScenarioSet";
-import { useScenarioCompare } from "./features/feeConfidenceCompare/hooks/useScenarioCompare";
-import { CompareTable } from "./features/feeConfidenceCompare/ui/compareTable";
+import { useLovableCompare } from "./features/feeConfidenceCompare/hooks/useLovableCompare";
+
+import AppHeader from "./ui/lovable/fee-confidence/AppHeader";
+import ScenarioName from "./ui/lovable/fee-confidence/ScenarioName";
+import ErrorBanner from "./ui/lovable/fee-confidence/ErrorBanner";
+import InputsCard from "./ui/lovable/fee-confidence/InputsCard";
+import CostStackCard from "./ui/lovable/fee-confidence/CostStackCard";
+import FeeAnalysisCard from "./ui/lovable/fee-confidence/FeeAnalysisCard";
+import JsonOutputDrawer from "./ui/lovable/fee-confidence/JsonOutputDrawer";
+import CollapsibleCard from "./ui/lovable/fee-confidence/CollapsibleCard";
+import ScenarioComparisonTable from "./ui/lovable/fee-confidence/ScenarioComparisonTable";
+
+import type { InputField, CostStackRow, FeeAnalysisData } from "./ui/lovable/fee-confidence/types";
 
 /* ---------- App Constants ----------
    Local friction gate for internal use only (NOT authentication/authorization).
 */
 const APP_PASSCODE = "honkytonky";
 
-/* ---------- Format Helpers ----------
-   Pure display helpers for rendering values in the UI; do not use these for compute.
-*/
-const money = (n: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
-
-const pct = (decimal: number) => `${(decimal * 100).toFixed(2)}%`;
-
-/**
- * Safe UI formatting helper.
- * - When result is null/undefined, returns empty string so UI can render cleanly.
- * - Keeps display logic centralized (prevents repeated null checks everywhere).
- */
-const show = <T,>(
-  result: T | null | undefined,
-  formatter: (value: T) => string
-): string => {
-  return result != null ? formatter(result) : "";
-};
-
 /* ---------- PasscodeGate ----------
    Lightweight “keep honest people honest” gate; stores unlock + identity in browser storage.
+   (Kept as-is for v1.2.x; not part of the Lovable component set listed.)
 */
-/**
- * Passcode-only entry screen.
- *
- * Side effects:
- * - None in this component directly; storage writes occur in App() onUnlock handler.
- *
- * UX notes:
- * - Allows pressing Enter in the passcode field to submit.
- * - Requires "who" for attribution/traceability in screenshots and shared outputs.
- */
 function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
   const [pass, setPass] = useState("");
   const [who, setWho] = useState("");
@@ -75,12 +63,9 @@ function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
         }}
       >
         <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Fee Confidence</div>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>
-          Enter passcode to continue.
-        </div>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Enter passcode to continue.</div>
 
         <div style={{ display: "grid", gap: 10 }}>
-          {/* Identity input (UI-only; stored by parent on unlock) */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Name</div>
             <input
@@ -91,7 +76,6 @@ function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
             />
           </div>
 
-          {/* Passcode input (Enter-to-submit supported) */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Passcode</div>
             <input
@@ -107,14 +91,8 @@ function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  if (pass !== APP_PASSCODE) {
-                    setErr("Wrong passcode.");
-                    return;
-                  }
-                  if (!who.trim()) {
-                    setErr("Please enter your name.");
-                    return;
-                  }
+                  if (pass !== APP_PASSCODE) return setErr("Wrong passcode.");
+                  if (!who.trim()) return setErr("Please enter your name.");
                   onUnlock(who.trim());
                 }
               }}
@@ -125,22 +103,12 @@ function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
             />
           </div>
 
-          {/* Inline validation error */}
           {err && <div style={{ fontSize: 12, color: "#7f1d1d" }}>{err}</div>}
 
-          {/* Explicit unlock button (same validation as Enter-to-submit) */}
           <button
             onClick={() => {
-              if (pass !== APP_PASSCODE) {
-                setErr("Wrong passcode.");
-                return;
-              }
-
-              if (!who.trim()) {
-                setErr("Please enter your name.");
-                return;
-              }
-
+              if (pass !== APP_PASSCODE) return setErr("Wrong passcode.");
+              if (!who.trim()) return setErr("Please enter your name.");
               onUnlock(who.trim());
             }}
             style={{
@@ -160,192 +128,49 @@ function PasscodeGate({ onUnlock }: { onUnlock: (who: string) => void }) {
   );
 }
 
-/* ---------- UI Primitives ----------
-   Small reusable components used to keep the main render tree readable.
-*/
+/* ---------- AuthedApp ---------- */
 
-/** Small metric tile used in the “Gold Output” header. */
-const Stat = ({ label, value }: { label: string; value: string }) => (
-  <div style={{ display: "grid", gap: 4 }}>
-    <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
-    <div style={{ fontSize: 18, fontWeight: 700 }}>{value}</div>
-  </div>
-);
-
-/** Label + input wrapper used for consistent spacing and typography in the assumptions panel. */
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div style={{ display: "grid", gap: 6 }}>
-    <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{label}</div>
-    {children}
-  </div>
-);
-
-type SelectInputProps = React.ComponentProps<"select"> & { invalid?: boolean };
-
-/**
- * Styled select input with invalid state highlighting.
- * Note: Uses inline focus/blur handlers to keep styling predictable without a CSS framework.
- */
-const SelectInput = ({ invalid, ...props }: SelectInputProps) => (
-  <select
-    {...props}
-    style={{
-      width: "100%",
-      maxWidth: "85%",
-      height: 40,
-      padding: "0 12px",
-      borderRadius: 10,
-      border: `1px solid ${invalid ? "#fca5a5" : "#e5e7eb"}`,
-      boxShadow: invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none",
-      background: "white",
-      fontSize: 14,
-      outline: "none",
-      display: "block",
-      boxSizing: "border-box",
-      ...(props.style ?? {}),
-    }}
-    onFocus={(e) => {
-      e.currentTarget.style.borderColor = "#c7d2fe";
-      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
-      props.onFocus?.(e);
-    }}
-    onBlur={(e) => {
-      e.currentTarget.style.borderColor = invalid ? "#fca5a5" : "#e5e7eb";
-      e.currentTarget.style.boxShadow = invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none";
-      props.onBlur?.(e);
-    }}
-  />
-);
-
-/**
- * Styled text input with invalid state highlighting.
- * Note: invalid is purely UI validation (parseable check), not canonical CDIO validation.
- */
-const TextInput = ({
-  invalid,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) => (
-  <input
-    {...props}
-    style={{
-      width: "100%",
-      maxWidth: "80%",
-      height: 40,
-      padding: "0 12px",
-      borderRadius: 10,
-      border: `1px solid ${invalid ? "#fca5a5" : "#e5e7eb"}`,
-      boxShadow: invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none",
-      background: "white",
-      fontSize: 14,
-      outline: "none",
-      ...(props.style ?? {}),
-    }}
-    onFocus={(e) => {
-      e.currentTarget.style.borderColor = "#c7d2fe"; // subtle indigo tint
-      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
-      props.onFocus?.(e);
-    }}
-    onBlur={(e) => {
-      e.currentTarget.style.borderColor = invalid ? "#fca5a5" : "#e5e7eb";
-      e.currentTarget.style.boxShadow = invalid ? "0 0 0 3px rgba(239,68,68,0.10)" : "none";
-      props.onBlur?.(e);
-    }}
-  />
-);
-
-/** Labeled line item used in the cost stack and fee outcome sections. */
-const Row = ({
-  label,
-  code,
-  value,
-  strong,
-}: {
-  label: string;
-  code?: string;
-  value: string;
-  strong?: boolean;
-}) => (
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 16,
-      padding: "10px 0",
-      borderBottom: "1px solid #eef2f7",
-      fontWeight: strong ? 700 : 500,
-    }}
-  >
-    <div style={{ color: "#111827" }}>
-      {label}
-      {code && (
-        <span style={{ color: "#9ca3af", fontSize: 12, marginLeft: 6 }}>
-          {code}
-        </span>
-      )}
-    </div>
-    <div style={{ color: "#111827" }}>{value}</div>
-  </div>
-);
-
-/* ---------- AuthedApp ----------
-   Main application UI rendered only after “unlocked” gate; owns ScenarioUI state and compute integration.
-*/
-/**
- * Main Fee Confidence UI shell.
- *
- * Responsibilities:
- * - Holds ScenarioUI state (string-based UI model).
- * - Converts ScenarioUI → canonical CDIOv11 (decimals, types, ids).
- * - Calls useComputedScenario to compute CDOO and manage stale/lastGood display behavior.
- * - Renders results (“Gold Output”) + inputs (“Assumptions & Inputs”).
- */
 function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
-  /* ---------- Scenario UI State ----------
-     UI values are strings to preserve the raw user input while editing.
-  */
-  const [ui, setUi] = useState<ScenarioUI>(defaultScenarioUI);
   const [activeSlot, setActiveSlot] = useState<"A" | "B" | "C">("A");
-  /* ---------- UI → Canonical CDIO Mapping ----------
-     Converts UI strings into canonical inputs for Truth Engine.
-     DO NOT add math here — keep compute logic inside truthEngine.ts.
-  */
-  const cdio = useMemo<CDIOv11>(() => {
-    return {
-      cdio_version: "1.1",
-      scenario_id: ui.scenarioName,
-      contract_type: ui.contractTypeName,
-      cost_inputs: {
-        direct_labor: ui.directLabor,
-        fringe_rate: percentToDecimalString(ui.fringePct),
-        overhead_rate: percentToDecimalString(ui.overheadPct),
-        gna_rate: percentToDecimalString(ui.gnaPct),
-      },
-      fee_input: {
-        fee_percent: percentToDecimalString(ui.feePct),
-      },
-    };
-  }, [
-    ui.directLabor,
-    ui.fringePct,
-    ui.overheadPct,
-    ui.gnaPct,
-    ui.feePct,
-    ui.scenarioName,
-    ui.contractTypeName,
-  ]);
+  const [jsonCollapsed, setJsonCollapsed] = useState(true);
+  const [inputsCollapsed, setInputsCollapsed] = useState(true);
 
+  // UI -> CDIO mapper (used by useScenarioSet)
+  const toCDIO = (u: ScenarioUI): CDIOv11 => ({
+    cdio_version: "1.1",
+    scenario_id: u.scenarioName,
+    contract_type: u.contractTypeName,
+    cost_inputs: {
+      direct_labor: u.directLabor,
+      fringe_rate: percentToDecimalString(u.fringePct),
+      overhead_rate: percentToDecimalString(u.overheadPct),
+      gna_rate: percentToDecimalString(u.gnaPct),
+    },
+    fee_input: {
+      fee_percent: percentToDecimalString(u.feePct),
+    },
+  });
 
-  /* ---------- Compute Integration ----------
-     Computes CDOO and provides safe fallback display when inputs temporarily become invalid.
-  */
-  const scenarioSet = useScenarioSet({ who, cdio });
+  const scenarioSet = useScenarioSet({
+    who,
+    ui: defaultScenarioUI,
+    toCDIO,
+  });
+
   const { envelopes, slots, addSlot, removeSlot, updateEnvelopeUI } = scenarioSet;
-  const { view } = useScenarioCompare(envelopes);
+
+  // Active envelope selection (safe even if B/C removed)
+  const activeEnvelope = envelopes.find((e) => e.slot === activeSlot) ?? envelopes[0];
+  const effectiveActiveSlot = activeEnvelope.slot;
+  const activeUI = activeEnvelope.ui;
+
+  // Compute only for the active scenario (compare view computes its own columns)
+  const cdio = activeEnvelope.cdio;
   const { result, error, display, isStale } = useComputedScenario(cdio);
-  /* ---------- UI Validation (Parseability Only) ----------
-     Simple guardrails to prevent obvious invalid inputs (empty, non-numeric).
-     Canonical validation still lives in Truth Engine and can throw.
-  */
+
+  const lovable = useLovableCompare(envelopes);
+
+  /* ---------- UI Validation (Parseability Only) ---------- */
   const isParseableNumber = (s: string) => {
     const cleaned = s.trim().replace(/\$/g, "").replace(/,/g, "");
     if (cleaned === "") return false;
@@ -354,489 +179,374 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
 
   const normalizeName = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
-  // Active envelope selection (safe even if B/C removed)
-  const activeEnvelope =
-    envelopes.find((e) => e.slot === activeSlot) ?? envelopes[0];
-
-  const effectiveActiveSlot = activeEnvelope.slot;
-
-  // Name uniqueness validation (across active envelopes)
   const getScenarioNameError = (name: string, selfSlot: string) => {
     const key = normalizeName(name);
     if (!key) return "Scenario name is required.";
 
-    const conflict = envelopes.find(
-      (e) => e.slot !== selfSlot && normalizeName(e.ui.scenarioName) === key
-    );
-
-    return conflict
-      ? `Scenario name must be unique (conflicts with Scenario ${conflict.slot}).`
-      : null;
+    const conflict = envelopes.find((e) => e.slot !== selfSlot && normalizeName(e.ui.scenarioName) === key);
+    return conflict ? `Scenario name must be unique (conflicts with Scenario ${conflict.slot}).` : null;
   };
 
-  const nameError = getScenarioNameError(
-    activeEnvelope.ui.scenarioName,
-    effectiveActiveSlot
-  );
+  const nameError = getScenarioNameError(activeUI.scenarioName, effectiveActiveSlot);
 
   const invalid = {
-    directLabor: !isParseableNumber(ui.directLabor),
-    fringePct: !isParseableNumber(ui.fringePct),
-    overheadPct: !isParseableNumber(ui.overheadPct),
-    gnaPct: !isParseableNumber(ui.gnaPct),
-    feePct: !isParseableNumber(ui.feePct),
+    directLabor: !isParseableNumber(activeUI.directLabor),
+    fringePct: !isParseableNumber(activeUI.fringePct),
+    overheadPct: !isParseableNumber(activeUI.overheadPct),
+    gnaPct: !isParseableNumber(activeUI.gnaPct),
+    feePct: !isParseableNumber(activeUI.feePct),
   };
 
-  /* ---------- Render ----------
-     Layout is split into:
-     1) Header (title, version, identity, logout)
-     2) Gold Output (computed narrative + tables + JSON)
-     3) Assumptions & Inputs (collapsible editing panel + error banner)
-  */
+  const canAddB = !slots.includes("B");
+  const canAddC = slots.includes("B") && !slots.includes("C");
+
+  const onAddScenario = () => {
+    if (!!nameError) return; // keep: disabled when nameError exists
+    if (canAddB) return addSlot("B");
+    if (canAddC) return addSlot("C");
+  };
+
+  const slotButton = (slot: "A" | "B" | "C") => {
+    const exists = slots.includes(slot);
+    const selected = effectiveActiveSlot === slot;
+
+    return (
+      <button
+        key={slot}
+        type="button"
+        onClick={() => exists && setActiveSlot(slot)}
+        disabled={!exists}
+        className={[
+          "h-8 w-9 rounded-md border text-xs font-extrabold transition-colors",
+          exists ? "opacity-100" : "opacity-40 cursor-not-allowed",
+          selected ? "bg-foreground text-background border-foreground" : "bg-background text-foreground border-border",
+        ].join(" ")}
+        title={exists ? `Switch to Scenario ${slot}` : `Scenario ${slot} not added`}
+      >
+        {slot}
+      </button>
+    );
+  };
+
+  // ---- Adapters for Lovable presentational components (smallest possible) ----
+
+  const inputFields: InputField[] = useMemo(() => {
+    const fields: InputField[] = [
+      {
+        code: "DL",
+        label: "Direct Labor ($)",
+        value: activeUI.directLabor,
+        onChange: (v) => updateEnvelopeUI(effectiveActiveSlot, { directLabor: v }),
+        error: invalid.directLabor ? "Enter a valid number." : undefined,
+      },
+      {
+        code: "FR",
+        label: "Fringe (%)",
+        value: activeUI.fringePct,
+        onChange: (v) => updateEnvelopeUI(effectiveActiveSlot, { fringePct: v }),
+        error: invalid.fringePct ? "Enter a valid number." : undefined,
+      },
+      {
+        code: "OH",
+        label: "Overhead (%)",
+        value: activeUI.overheadPct,
+        onChange: (v) => updateEnvelopeUI(effectiveActiveSlot, { overheadPct: v }),
+        error: invalid.overheadPct ? "Enter a valid number." : undefined,
+      },
+      {
+        code: "GA",
+        label: "G&A (%)",
+        value: activeUI.gnaPct,
+        onChange: (v) => updateEnvelopeUI(effectiveActiveSlot, { gnaPct: v }),
+        error: invalid.gnaPct ? "Enter a valid number." : undefined,
+      },
+      {
+        code: "FP",
+        label: "Fee (%)",
+        value: activeUI.feePct,
+        onChange: (v) => updateEnvelopeUI(effectiveActiveSlot, { feePct: v }),
+        error: invalid.feePct ? "Enter a valid number." : undefined,
+      },
+    ];
+
+    return fields;
+  }, [
+    activeUI.directLabor,
+    activeUI.fringePct,
+    activeUI.overheadPct,
+    activeUI.gnaPct,
+    activeUI.feePct,
+    effectiveActiveSlot,
+    invalid.directLabor,
+    invalid.fringePct,
+    invalid.overheadPct,
+    invalid.gnaPct,
+    invalid.feePct,
+    updateEnvelopeUI,
+  ]);
+
+  const costRows: CostStackRow[] = useMemo(() => {
+    const cs = display?.cost_stack;
+    if (!cs) return [];
+
+    return [
+      { code: "DL", label: "Direct Labor", value: cs.direct_labor },
+      { code: "FA", label: "Fringe Amount", value: cs.fringe_amount },
+      { code: "OA", label: "Overhead Amount", value: cs.overhead_amount },
+      { code: "FBL", label: "Fully Burdened Labor", value: cs.fully_burdened_labor },
+      { code: "GA", label: "G&A Amount", value: cs.gna_amount },
+      { code: "TC", label: "Total Cost", value: cs.total_cost },
+    ];
+  }, [display?.cost_stack]);
+
+  const feeData: FeeAnalysisData = useMemo(() => {
+    const fa = display?.fee_analysis;
+
+    // Lovable cards expect "percent units" (e.g., 12.34) because they format with `${v.toFixed()}%` (no *100).
+    const feePercent = fa ? fa.fee_percent * 100 : 0;
+    const effectiveMargin = fa ? fa.effective_margin_percent * 100 : 0;
+
+    return {
+      feePercent,
+      feeAmount: fa?.fee_dollars ?? 0,
+      effectiveMargin,
+      contractValue: fa?.derived_contract_value ?? 0,
+      totalCost: display?.cost_stack?.total_cost ?? 0,
+    };
+  }, [display?.fee_analysis, display?.cost_stack?.total_cost]);
+
+  const headerSubtitle = who ? `Logged in as ${who}` : undefined;
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f9fafb",
-        padding: "32px 20px",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: 1000, margin: "0 auto" }}>
-        {/* ---------- Header Card ----------
-           Shows app identity + version + who is logged in. Not included in exported output.
-        */}
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 16,
-            padding: 24,
-            background: "white",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-            marginTop: 2,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0 }}>Fee Confidence</h1>
+    <div className="min-h-screen bg-background px-5 py-8">
+      <div className="mx-auto w-full max-w-[1400px] px-2 grid gap-6">
+        {/* Header */}
+        <div className="grid gap-3">
+          <AppHeader
+            title="Fee Confidence"
+            subtitle={headerSubtitle}
+            modelBadge={`v${import.meta.env.VITE_APP_VERSION ?? "1.2.x"}`}
+            onLogOut={onLogout}
+          />
 
-              {/* ---------- Version Badge ----------
-              Displays build version sourced from package.json via Vite define (__APP_VERSION__).
-              DO NOT hardcode; version is injected at build time to prevent badge/release mismatch.*/}
-              <div
-                style={{
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  borderRadius: 999,
-                  background: "#eef2ff",
-                  color: "#3730a3",
-                }}
-              >
-                v{__APP_VERSION__}
-              </div>
+          {/* Scenario controls row */}
+          <div className="fc-card-secondary flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground mr-1">Scenario</span>
+              {slotButton("A")}
+              {slotButton("B")}
+              {slotButton("C")}
+            </div>
 
-              {/* Right: identity + scenario controls + logout */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {who && (
-                  <div style={{ fontSize: 14, color: "#6b7280" }}>
-                    Logged in as <b style={{ color: "#111827" }}>{who}</b>
-                  </div>
-                )}
-
-                {/* Scenario controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {!slots.includes("B") && (
-                    <button
-                      onClick={() => addSlot("B")}
-                      disabled={!!nameError}
-                      style={{
-                        height: 32,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e5e7eb",
-                        background: "white",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        opacity: nameError ? 0.5 : 1,
-                        cursor: nameError ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      + B
-                    </button>
-                  )}
-
-                  {!slots.includes("C") && slots.includes("B") && (
-                    <button
-                      onClick={() => addSlot("C")}
-                      disabled={!!nameError}
-                      style={{
-                        height: 32,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e5e7eb",
-                        background: "white",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        opacity: nameError ? 0.5 : 1,
-                        cursor: nameError ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      + C
-                    </button>
-                  )}
-
-                  {slots.includes("C") && (
-                    <button
-                      onClick={() => removeSlot("C")}
-                      style={{
-                        height: 32,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e5e7eb",
-                        background: "white",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#7f1d1d",
-                      }}
-                    >
-                      − C
-                    </button>
-                  )}
-
-                  {slots.includes("B") && !slots.includes("C") && (
-                    <button
-                      onClick={() => removeSlot("B")}
-                      style={{
-                        height: 32,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e5e7eb",
-                        background: "white",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#7f1d1d",
-                      }}
-                    >
-                      − B
-                    </button>
-                  )}
-                </div>
-
+            <div className="flex items-center gap-2">
+              {canAddB && (
                 <button
-                  onClick={onLogout}
-                  style={{
-                    height: 32,
-                    padding: "0 12px",
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                    background: "white",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
+                  type="button"
+                  onClick={() => addSlot("B")}
+                  disabled={!!nameError}
+                  className={[
+                    "h-9 px-3 rounded-md border text-sm font-semibold transition-colors",
+                    "border-foreground bg-background text-foreground hover:bg-accent",
+                    nameError ? "opacity-50 cursor-not-allowed" : "",
+                  ].join(" ")}
                 >
-                  Logout
+                  + B
                 </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* ---------- Gold Output ----------
-           Primary results card. Uses display (result OR lastGood) so the UI stays stable during invalid input edits.
-        */}
-          <div
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 16,
-              padding: 24,
-              background: "white",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-              marginTop: 24,
-            }}
-          >
-            {/* ---------- Summary Header ----------
-             Scenario title + high-level KPI tiles.
-          */}
-            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 14, color: "#6b7280" }}>Scenario</div>
-                <div style={{ fontSize: 24, fontWeight: 800 }}>{ui.scenarioName}</div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
-                  Contract Type: <b style={{ color: "#111827" }}>{result?.contract_type ?? ui.contractTypeName}</b> •
-                  Rounding: <b style={{ color: "#111827" }}>{result?.meta.rounding ?? "HALF_AWAY_FROM_ZERO"}</b>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(200px, 1fr))", gap: 20 }}>
-                <Stat label="Derived Contract Value" value={show(display?.fee_analysis.derived_contract_value, money)} />
-                <Stat label="Total Cost" value={show(display?.cost_stack.total_cost, money)} />
-                <Stat label="Fee Dollars" value={show(display?.fee_analysis.fee_dollars, money)} />
-                <Stat label="Effective Margin" value={show(display?.fee_analysis.effective_margin_percent, pct)} />
-              </div>
-            </div>
-
-            {/* ---------- Narrative Block ----------
-             Human-readable interpretation of the results (shows guidance text until compute succeeds).
-          */}
-            <div
-              style={{
-                marginTop: 20,
-                padding: 14,
-                borderRadius: 12,
-                background: "#f3f4f6",
-                fontSize: 14,
-                color: "#111827",
-              }}
-            >
-              {result ? (
-                <>
-                  Based on declared cost assumptions and a fee of <b>{show(result.fee_analysis.fee_percent, pct)}</b>,
-                  the derived contract value is <b>{show(result.fee_analysis.derived_contract_value, money)}</b> with an
-                  effective margin of <b>{show(result.fee_analysis.effective_margin_percent, pct)}</b>.
-                </>
-              ) : (
-                <>Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.</>
               )}
-            </div>
 
-            {/* ---------- Detailed Tables ---------- */}
-            {slots.length === 1 ? (
-              <div
-                style={{
-                  opacity: isStale ? 0.35 : 1,
-                  transition: "opacity 120ms ease",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 28,
-                  marginTop: 28,
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Cost Construction</div>
-                  <Row label="Direct Labor" code="DL" value={show(display?.cost_stack.direct_labor, money)} />
-                  <Row label="Fringe Amount" code="FA" value={show(display?.cost_stack.fringe_amount, money)} />
-                  <Row label="Overhead Amount" code="OA" value={show(display?.cost_stack.overhead_amount, money)} />
-                  <Row
-                    label="Fully Burdened Labor"
-                    code="FBL"
-                    value={show(display?.cost_stack.fully_burdened_labor, money)}
-                    strong
-                  />
-                  <Row label="G&A Amount" code="GA" value={show(display?.cost_stack.gna_amount, money)} />
-                  <Row label="Total Cost" code="TC" value={show(display?.cost_stack.total_cost, money)} strong />
-                </div>
-
-                <div>
-                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Fee & Outcome</div>
-                  <Row label="Fee Percent" code="FP" value={show(display?.fee_analysis.fee_percent, pct)} />
-                  <Row label="Fee Dollars" code="FD" value={show(display?.fee_analysis.fee_dollars, money)} />
-                  <Row
-                    label="Derived Contract Value"
-                    code="DCV"
-                    value={show(display?.fee_analysis.derived_contract_value, money)}
-                    strong
-                  />
-                  <Row
-                    label="Effective Margin"
-                    code="EM"
-                    value={show(display?.fee_analysis.effective_margin_percent, pct)}
-                    strong
-                  />
-                </div>
-              </div>
-            ) : (
-              <CompareTable view={view} money={money} pct={pct} />
-            )}
-
-
-            {/* ---------- Canonical JSON Output ----------
-             Debug/traceability view of the computed CDOO.*/}
-            <details style={{ marginTop: 20 }}>
-              <summary style={{ cursor: result ? "pointer" : "not-allowed", opacity: result ? 1 : 0.6 }}>
-                show Canonical Output (CDOO JSON)
-              </summary>
-
-              {result ? (
-                <pre
-                  style={{
-                    padding: 14,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    background: "#fafafa",
-                    overflowX: "auto",
-                    marginTop: 10,
-                  }}
+              {canAddC && (
+                <button
+                  type="button"
+                  onClick={() => addSlot("C")}
+                  disabled={!!nameError}
+                  className={[
+                    "h-9 px-3 rounded-md border text-sm font-semibold transition-colors",
+                    "border-foreground bg-background text-foreground hover:bg-accent",
+                    nameError ? "opacity-50 cursor-not-allowed" : "",
+                  ].join(" ")}
                 >
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              ) : (
-                <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-                  Fix inputs to view CDOO output.
-                </div>
+                  + C
+                </button>
               )}
-            </details>
+
+              {slots.includes("C") && (
+                <button
+                  type="button"
+                  onClick={() => removeSlot("C")}
+                  className="h-9 px-3 rounded-md border border-border bg-background text-sm font-semibold text-destructive hover:bg-accent transition-colors"
+                >
+                  − C
+                </button>
+              )}
+
+              {slots.includes("B") && !slots.includes("C") && (
+                <button
+                  type="button"
+                  onClick={() => removeSlot("B")}
+                  className="h-9 px-3 rounded-md border border-border bg-background text-sm font-semibold text-destructive hover:bg-accent transition-colors"
+                >
+                  − B
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+                {/* Main layout: content + right rail */}
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_360px] md:items-start">
+          {/* LEFT: Results / Compare */}
+          <div className="grid gap-6">
+            {/* Gold Output / Results */}
+            <div className="fc-card-elevated grid gap-5">
+              {/* Topline / context */}
+              <div className="flex flex-col gap-2">
+                <div className="text-sm text-muted-foreground">Scenario</div>
+                <div className="text-2xl font-extrabold tracking-tight text-foreground">
+                  {activeUI.scenarioName}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Contract Type:{" "}
+                  <b className="text-foreground">
+                    {result?.contract_type ?? activeUI.contractTypeName}
+                  </b>{" "}
+                  • Rounding:{" "}
+                  <b className="text-foreground">
+                    {result?.meta.rounding ?? "HALF_AWAY_FROM_ZERO"}
+                  </b>
+                </div>
+              </div>
+
+              {/* Summary band */}
+              <div className="rounded-md bg-secondary px-5 py-4 border border-border text-sm text-secondary-foreground">
+                {result ? (
+                  <>
+                    Based on declared cost assumptions and a fee of{" "}
+                    <b>{((display?.fee_analysis?.fee_percent ?? 0) * 100).toFixed(2)}%</b>, the
+                    derived contract value is{" "}
+                    <b>
+                      {(display?.fee_analysis?.derived_contract_value ?? 0).toLocaleString("en-US", {
+                        style: "currency",
+                        currency: "USD",
+                        minimumFractionDigits: 0,
+                      })}
+                    </b>{" "}
+                    with an effective margin of{" "}
+                    <b>{((display?.fee_analysis?.effective_margin_percent ?? 0) * 100).toFixed(2)}%</b>.
+                  </>
+                ) : (
+                  <>Enter valid inputs to compute the derived contract value, fee dollars, and effective margin.</>
+                )}
+              </div>
+
+              {/* Error banner (compute failures) */}
+              <ErrorBanner message={error ? `Can’t compute: ${error}` : null} />
+
+              {/* Detailed tables / cards */}
+              {slots.length === 1 ? (
+                <div
+                  className={[
+                    "grid gap-6 md:grid-cols-2 transition-opacity",
+                    isStale ? "opacity-35" : "opacity-100",
+                  ].join(" ")}
+                >
+                  <CostStackCard
+                    rows={costRows}
+                    totalLabel="Total Cost"
+                    totalValue={display?.cost_stack?.total_cost ?? 0}
+                  />
+                  <FeeAnalysisCard data={feeData} />
+                </div>
+              ) : (
+                <ScenarioComparisonTable
+                  rows={lovable.rows}
+                  scenarios={lovable.scenarios}
+                  deltas={lovable.deltas}
+                />
+              )}
+
+              {/* Canonical JSON */}
+              <JsonOutputDrawer
+                data={(result ?? {}) as Record<string, unknown>}
+                collapsed={jsonCollapsed}
+                onToggle={() => setJsonCollapsed((v) => !v)}
+              />
+            </div>
           </div>
 
-          {/* ---------- Assumptions & Inputs ----------
-           Collapsible editing panel for ScenarioUI values; shows compute error banner when Truth Engine throws.*/}
-          <details style={{ marginTop: 24 }}>
-            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
-              Assumptions & Inputs
-            </summary>
+          {/* RIGHT: Inputs rail (always visible on md+) */}
+          <div className="grid gap-4">
+            <div className="fc-card-secondary grid gap-4">
+              <ScenarioName
+                value={activeUI.scenarioName}
+                onChange={(v) => updateEnvelopeUI(effectiveActiveSlot, { scenarioName: v })}
+                isValid={!nameError}
+                validationMessage={nameError ?? undefined}
+              />
 
-            {/* ---------- Error Banner ----------
-             Only shown when compute fails. NOTE: if zoomed, this can scroll off-screen (tracked UX note).*/}
-            {error && (
-              <div
-                style={{
-                  marginBottom: 16,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: "1px solid #fecaca",
-                  background: "#fff1f2",
-                  color: "#7f1d1d",
-                  fontSize: 13,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                <b>Can’t compute:</b> {error}
-              </div>
-            )}
-
-            {/* ---------- Input Card ----------
-             These inputs update ScenarioUI only; canonical CDIO conversion occurs in the memo block above.*/}
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 16,
-                padding: 20,
-                background: "white",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-                marginTop: 12,
-              }}
-            >
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(260px, 1fr))", gap: 16 }}>
-                <Field label="Scenario Name">
-                  <TextInput
-                    value={activeEnvelope.ui.scenarioName}
-                    onChange={(e) => {
-                      const v = e.target.value;
-
-                      // Update envelope (used for uniqueness + compare)
-                      updateEnvelopeUI(effectiveActiveSlot, { scenarioName: v });
-
-                      // Update main UI (used for CDIO scenario_id + header display)
-                      setUi((prev) => ({ ...prev, scenarioName: v }));
-                    }}
-                  />
-
-                  {nameError && (
-                    <div style={{ fontSize: 12, color: "#7f1d1d", marginTop: 6 }}>
-                      {nameError}
-                    </div>
-                  )}
-                </Field>
-
-                <Field label="Contract Type">
-                  <SelectInput
-                    value={ui.contractTypeName}
-                    onChange={(e) =>
-                      setUi((prev) => ({
-                        ...prev,
-                        contractTypeName: e.target.value as typeof prev.contractTypeName,
-                      }))
-                    }
-                  >
-                    <option value="CPFF">CPFF</option>
-                    <option value="TM">TM</option>
-                  </SelectInput>
-                </Field>
-
-                <Field label="Direct Labor ($)">
-                  <TextInput
-                    value={ui.directLabor}
-                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, directLabor: e.target.value }))}
-                    inputMode="decimal"
-                    invalid={invalid.directLabor}
-                  />
-                </Field>
-
-                <Field label="Fringe (%)">
-                  <TextInput
-                    value={ui.fringePct}
-                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, fringePct: e.target.value }))}
-                    inputMode="decimal"
-                    invalid={invalid.fringePct}
-                  />
-                </Field>
-
-                <Field label="Overhead (%)">
-                  <TextInput
-                    value={ui.overheadPct}
-                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, overheadPct: e.target.value }))}
-                    inputMode="decimal"
-                    invalid={invalid.overheadPct}
-                  />
-                </Field>
-
-                <Field label="G&A (%)">
-                  <TextInput
-                    value={ui.gnaPct}
-                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, gnaPct: e.target.value }))}
-                    inputMode="decimal"
-                    invalid={invalid.gnaPct}
-                  />
-                </Field>
-
-                <Field label="Fee (%)">
-                  <TextInput
-                    value={ui.feePct}
-                    onChange={(e) => setUi((prev: ScenarioUI) => ({ ...prev, feePct: e.target.value }))}
-                    inputMode="decimal"
-                    invalid={invalid.feePct}
-                  />
-                </Field>
+              <div className="flex flex-col gap-1.5">
+                <label className="fc-label" htmlFor="contract-type">
+                  Contract Type
+                </label>
+                <select
+                  id="contract-type"
+                  value={activeUI.contractTypeName}
+                  onChange={(e) =>
+                    updateEnvelopeUI(effectiveActiveSlot, {
+                      contractTypeName: e.target.value as ScenarioUI["contractTypeName"],
+                    })
+                  }
+                  className="h-9 rounded-md border border-input bg-card px-3 text-sm font-medium text-card-foreground outline-none transition-colors
+                    focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                >
+                  <option value="CPFF">CPFF</option>
+                  <option value="TM">TM</option>
+                </select>
               </div>
 
-              <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
+              <InputsCard
+                fields={inputFields}
+                onAddScenario={slots.length < 3 ? onAddScenario : undefined}
+                // onImport={...} // leave undefined until you wire import behavior
+              />
+
+              <p className="text-xs text-muted-foreground">
                 Inputs are CDIO v1.1 fields. Percent inputs are converted to decimals for canonical calculation.
-              </div>
+              </p>
             </div>
-          </details>
+
+            {/* Optional: keep collapsible inputs for small screens only (no duplicates on md+) */}
+            <div className="md:hidden">
+              <CollapsibleCard
+                title="Assumptions & Inputs"
+                defaultCollapsed={true}
+                collapsed={inputsCollapsed}
+                onToggle={() => setInputsCollapsed((v) => !v)}
+                variant="secondary"
+              >
+                <div className="grid gap-5">
+                  <ScenarioName
+                    value={activeUI.scenarioName}
+                    onChange={(v) => updateEnvelopeUI(effectiveActiveSlot, { scenarioName: v })}
+                    isValid={!nameError}
+                    validationMessage={nameError ?? undefined}
+                  />
+                  <InputsCard fields={inputFields} />
+                </div>
+              </CollapsibleCard>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ---------- App Root ---------- ...
- 
-         Owns browser storage + unlock gating, then renders AuthedApp when unlocked.
-      */
-/**
- * Root App component.
- *
- * Storage keys:
- * - sessionStorage: fc_unlocked (string "1") — session-only gate
- * - localStorage:   fc_who      (string)     — persists identity across sessions
- *
- * DO NOT TREAT THIS AS SECURITY:
- * - This is a lightweight internal friction gate only.
- */
+/* ---------- App Root ---------- */
+
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("fc_unlocked") === "1");
   const [who, setWho] = useState(() => localStorage.getItem("fc_who") ?? "");
 
-
-  /* ---------- Gate ----------
-     Show PasscodeGate until unlocked. Unlock writes browser storage and updates React state.
-  */
   if (!unlocked) {
     return (
       <PasscodeGate
@@ -850,9 +560,6 @@ export default function App() {
     );
   }
 
-  /* ---------- Main App ----------
-     Renders the authed application; logout clears session unlock only.
-  */
   return (
     <AuthedApp
       who={who}
