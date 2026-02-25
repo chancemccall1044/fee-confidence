@@ -1,23 +1,12 @@
 import CodeTag from "./CodeTag";
 import type { CostStackRow } from "./types";
+import { fmtCurrency, fmtPct1 } from "./format";
 
 interface CostStackCardProps {
   rows: CostStackRow[];
   totalLabel?: string;
   totalValue: number;
 }
-
-const fmt = (v: number) =>
-  Number.isFinite(v)
-    ? v.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : "—";
-
-const pct = (v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "—");
 
 const CostStackCard = ({
   rows,
@@ -41,10 +30,10 @@ const CostStackCard = ({
           <div className="flex items-center gap-4 shrink-0">
             {row.percentage !== undefined && (
               <span className="text-xs text-muted-foreground tabular-nums w-14 text-right font-mono">
-                {pct(row.percentage)}
+                {fmtPct1(row.percentage)}
               </span>
             )}
-            <span className="fc-value w-28">{fmt(row.value)}</span>
+            <span className="fc-value w-28">{fmtCurrency(row.value)}</span>
           </div>
         </div>
       ))}
@@ -52,7 +41,7 @@ const CostStackCard = ({
 
     <div className="mt-3 pt-3 border-t-2 border-foreground/20 flex items-center justify-between">
       <span className="text-sm font-semibold text-foreground">{totalLabel}</span>
-      <span className="fc-value w-28 text-foreground">{fmt(totalValue)}</span>
+      <span className="fc-value w-28 text-foreground">{fmtCurrency(totalValue)}</span>
     </div>
   </div>
 );

@@ -325,7 +325,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
           <AppHeader
             title="Fee Confidence"
             subtitle={headerSubtitle}
-            modelBadge={`v${import.meta.env.VITE_APP_VERSION ?? "1.2.x"}`}
+            modelBadge={`v${import.meta.env.VITE_APP_VERSION}`}
             onLogOut={onLogout}
           />
 

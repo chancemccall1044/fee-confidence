@@ -1,28 +1,17 @@
 import CodeTag from "./CodeTag";
 import type { FeeAnalysisData } from "./types";
+import { fmtCurrency, fmtPct2 } from "./format";
 
 interface FeeAnalysisCardProps {
   data: FeeAnalysisData;
 }
 
-const fmt = (v: number) =>
-  Number.isFinite(v)
-    ? v.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : "—";
-
-const pct = (v: number) => (Number.isFinite(v) ? `${v.toFixed(2)}%` : "—");
-
 const FeeAnalysisCard = ({ data }: FeeAnalysisCardProps) => {
   const rows = [
-    { code: "FA", label: "Fee Amount", value: fmt(data.feeAmount) },
-    { code: "FP", label: "Fee Percent", value: pct(data.feePercent) },
-    { code: "CV", label: "Contract Value", value: fmt(data.contractValue) },
-    { code: "TC", label: "Total Cost", value: fmt(data.totalCost) },
+    { code: "FA", label: "Fee Amount", value: fmtCurrency(data.feeAmount) },
+    { code: "FP", label: "Fee Percent", value: fmtPct2(data.feePercent) },
+    { code: "CV", label: "Contract Value", value: fmtCurrency(data.contractValue) },
+    { code: "TC", label: "Total Cost", value: fmtCurrency(data.totalCost) },
   ];
 
   return (
@@ -50,7 +39,7 @@ const FeeAnalysisCard = ({ data }: FeeAnalysisCardProps) => {
           <span className="text-sm font-bold text-foreground">Effective Margin</span>
         </div>
         <span className="text-xl font-extrabold tabular-nums text-foreground">
-          {pct(data.effectiveMargin)}
+          {fmtPct2(data.effectiveMargin)}
         </span>
       </div>
     </div>

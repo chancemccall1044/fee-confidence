@@ -1,36 +1,15 @@
+// src/ui/lovable/fee-confidence/ScenarioComparisonTable.tsx
 import CodeTag from "./CodeTag";
-
-// ── Formatting helpers (display only, no computation) ─────────────────
-const fmtCurrency = (v: number) =>
-  v.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  });
-
-const fmtPct1 = (v: number) => `${v.toFixed(1)}%`;
-const fmtPct2 = (v: number) => `${v.toFixed(2)}%`;
-
-const fmtDeltaCurrency = (v: number) => {
-  const sign = v >= 0 ? "+" : "";
-  return `${sign}${fmtCurrency(v)}`;
-};
-
-const fmtDeltaPct1 = (v: number) => {
-  const sign = v > 0 ? "+" : "";
-  return `${sign}${v.toFixed(1)}%`;
-};
-
-const fmtDeltaPct2 = (v: number) => {
-  const sign = v > 0 ? "+" : "";
-  return `${sign}${v.toFixed(2)}%`;
-};
+import {
+  fmtCurrency,
+  fmtPct1,
+  fmtPct2,
+  fmtDeltaCurrency,
+  fmtDeltaPct1,
+  fmtDeltaPct2,
+} from "./format";
 
 type Format = "currency" | "percent" | "percent2";
-
-const assertNever = (x: never): never => {
-  throw new Error(`Unexpected format: ${String(x)}`);
-};
 
 const formatValue = (v: number, fmt: Format) => {
   switch (fmt) {
@@ -40,8 +19,6 @@ const formatValue = (v: number, fmt: Format) => {
       return fmtPct1(v);
     case "percent2":
       return fmtPct2(v);
-    default:
-      return assertNever(fmt);
   }
 };
 
@@ -53,15 +30,8 @@ const formatDelta = (v: number, fmt: Format) => {
       return fmtDeltaPct1(v);
     case "percent2":
       return fmtDeltaPct2(v);
-    default:
-      return assertNever(fmt);
   }
 };
-
-const isFiniteNumber = (v: unknown): v is number =>
-  typeof v === "number" && Number.isFinite(v);
-
-// ── Types ─────────────────────────────────────────────────────────────
 
 interface RowDef {
   code?: string;
@@ -71,30 +41,21 @@ interface RowDef {
   isTotal?: boolean;
   isPrimary?: boolean;
   format: Format;
-  /** Getter to extract value from a scenario's flat value map */
   key: string;
 }
 
 interface ScenarioColumn {
   name: string;
-  /** Flat map of key → precomputed numeric value */
   values: Record<string, number>;
 }
 
 interface ScenarioComparisonTableProps {
   rows: RowDef[];
   scenarios: ScenarioColumn[];
-  /** Precomputed deltas for each scenario (index 0 is always empty/null) */
   deltas: (Record<string, number> | null)[];
 }
 
-// ── Component ─────────────────────────────────────────────────────────
-
-const ScenarioComparisonTable = ({
-  rows,
-  scenarios,
-  deltas,
-}: ScenarioComparisonTableProps) => {
+const ScenarioComparisonTable = ({ rows, scenarios, deltas }: ScenarioComparisonTableProps) => {
   const scenarioCount = scenarios.length;
 
   return (
@@ -118,10 +79,7 @@ const ScenarioComparisonTable = ({
             if (row.isHeader) {
               return (
                 <tr key={ri}>
-                  <td
-                    colSpan={scenarioCount + 1}
-                    className="pt-5 pb-1.5 border-b border-foreground/10"
-                  >
+                  <td colSpan={scenarioCount + 1} className="pt-5 pb-1.5 border-b border-foreground/10">
                     <span className="fc-section-title">{row.label}</span>
                   </td>
                 </tr>
@@ -140,20 +98,13 @@ const ScenarioComparisonTable = ({
                   ${isTotal ? "border-t-2 border-t-foreground/15" : ""}
                 `}
               >
-                {/* Label cell */}
-                <td
-                  className={`py-1.5 pr-4 align-top ${
-                    isPrimary ? "py-3" : ""
-                  }`}
-                >
+                <td className={`py-1.5 pr-4 align-top ${isPrimary ? "py-3" : ""}`}>
                   <div className="flex items-center gap-2">
                     {row.code && <CodeTag>{row.code}</CodeTag>}
                     <div className="min-w-0">
                       <span
                         className={`block truncate ${
-                          isTotal || isPrimary
-                            ? "text-sm font-semibold text-foreground"
-                            : "fc-label"
+                          isTotal || isPrimary ? "text-sm font-semibold text-foreground" : "fc-label"
                         }`}
                       >
                         {row.label}
@@ -167,22 +118,13 @@ const ScenarioComparisonTable = ({
                   </div>
                 </td>
 
-                {/* Value cells */}
                 {scenarios.map((scenario, si) => {
-                  const rawValue = scenario.values[row.key];
-                  const rawDelta = deltas[si]?.[row.key];
+                  const value = scenario.values[row.key];
+                  const delta = deltas[si]?.[row.key];
                   const isBaseline = si === 0;
 
-                  const value = isFiniteNumber(rawValue) ? rawValue : null;
-                  const delta = isFiniteNumber(rawDelta) ? rawDelta : null;
-
                   return (
-                    <td
-                      key={si}
-                      className={`text-right px-3 align-top ${
-                        isPrimary ? "py-3" : "py-1.5"
-                      }`}
-                    >
+                    <td key={si} className={`text-right px-3 align-top ${isPrimary ? "py-3" : "py-1.5"}`}>
                       <span
                         className={`block tabular-nums ${
                           isPrimary
@@ -192,17 +134,13 @@ const ScenarioComparisonTable = ({
                               : "fc-value text-sm"
                         }`}
                       >
-                        {value !== null ? formatValue(value, row.format) : "—"}
+                        {value !== undefined ? formatValue(value, row.format) : "—"}
                       </span>
 
-                      {!isBaseline && delta !== null && (
+                      {!isBaseline && delta !== undefined && delta !== null && (
                         <span
                           className={`block text-xs tabular-nums font-mono mt-0.5 ${
-                            delta > 0
-                              ? "text-fc-success"
-                              : delta < 0
-                                ? "text-destructive"
-                                : "text-muted-foreground"
+                            delta > 0 ? "text-fc-success" : delta < 0 ? "text-destructive" : "text-muted-foreground"
                           }`}
                         >
                           {formatDelta(delta, row.format)}
