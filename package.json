@@ -8,8 +8,8 @@
     "build": "npm run ui:alias-check && npm run ui:deps-check && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "ui:deps-check": "powershell -NoProfile -Command \"$ErrorActionPreference='Stop'; $p='src/ui/lovable/fee-confidence/**/*.ts*'; $m = Select-String -Path $p -Pattern '@radix-ui|class-variance-authority|tailwind-merge|\\bcn\\(|\\bcva\\(' -SimpleMatch:$false; if ($m) { Write-Host '❌ Disallowed UI deps detected in lovable UI'; $m | ForEach-Object { Write-Host $_.Path ':' $_.LineNumber ':' $_.Line }; exit 1 } else { Write-Host '✅ No disallowed UI deps in lovable UI' }\"",
-    "ui:alias-check": "powershell -Command \"if (Get-ChildItem -Recurse src/ui/lovable/fee-confidence -Include *.ts,*.tsx | Select-String '@/') { Write-Host '❌ Alias imports found in lovable UI'; exit 1 } else { Write-Host '✅ No alias imports in lovable UI' }\""
+    "ui:alias-check": "node scripts/ui-check.mjs",
+    "ui:deps-check": "node scripts/ui-check.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.575.0",
