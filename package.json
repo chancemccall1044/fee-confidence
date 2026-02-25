@@ -1,11 +1,11 @@
 {
   "name": "my-app",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run ui:alias-check && npm run ui:deps-check && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "ui:deps-check": "powershell -NoProfile -Command \"$ErrorActionPreference='Stop'; $p='src/ui/lovable/fee-confidence/**/*.ts*'; $m = Select-String -Path $p -Pattern '@radix-ui|class-variance-authority|tailwind-merge|\\bcn\\(|\\bcva\\(' -SimpleMatch:$false; if ($m) { Write-Host '❌ Disallowed UI deps detected in lovable UI'; $m | ForEach-Object { Write-Host $_.Path ':' $_.LineNumber ':' $_.Line }; exit 1 } else { Write-Host '✅ No disallowed UI deps in lovable UI' }\"",

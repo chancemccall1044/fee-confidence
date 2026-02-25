@@ -6,21 +6,40 @@ type Props = {
   pct: (decimal: number) => string;
 };
 
+type Kind = "money" | "rate" | "text";
+
+type SectionRow = { type: "section"; title: string };
+
+const isNumber = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+const toKind = (k: unknown): Kind => {
+  if (k === "money" || k === "rate" || k === "text") return k;
+  // default fallback keeps behavior stable if data is malformed
+  return "text";
+};
+
+const isSectionRow = (row: unknown): row is SectionRow => {
+  if (typeof row !== "object" || row === null) return false;
+  const r = row as Record<string, unknown>;
+  return r.type === "section" && typeof r.title === "string";
+};
+
 export function CompareTable({ view, money, pct }: Props) {
   const slots = view.slots ?? ["A"];
   const deltaSlots = slots.filter((s) => s !== view.baseline);
 
-  const cell = (v: any, kind: string) => {
+  const cell = (v: unknown, kind: Kind) => {
     if (v == null) return "—";
-    if (kind === "money") return money(v);
-    if (kind === "rate") return pct(v);
+    if (kind === "money") return isNumber(v) ? money(v) : "—";
+    if (kind === "rate") return isNumber(v) ? pct(v) : "—";
     return String(v);
   };
 
-  const deltaCell = (d: any, kind: string) => {
+  const deltaCell = (d: unknown, kind: Kind) => {
     if (d == null) return "—";
     const formatted = cell(d, kind);
-    return typeof d === "number" && d > 0 ? `+${formatted}` : formatted;
+    return isNumber(d) && d > 0 ? `+${formatted}` : formatted;
   };
 
   return (
@@ -63,14 +82,32 @@ export function CompareTable({ view, money, pct }: Props) {
       </div>
 
       <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-        {view.rows.map((row: any, idx: number) => {
-          if (row.type === "section") {
+        {view.rows.map((row: unknown, idx: number) => {
+          // row is unknown because CompareView might not be fully typed yet.
+
+          if (isSectionRow(row)) {
             return (
-              <div key={idx} style={{ marginTop: 12, fontWeight: 800, color: "#111827" }}>
+              <div
+                key={idx}
+                style={{ marginTop: 12, fontWeight: 800, color: "#111827" }}
+              >
                 {row.title}
               </div>
             );
           }
+
+          // metric row fallback
+          const r = row as {
+            label?: unknown;
+            metricId?: unknown;
+            kind?: unknown;
+            values?: Record<string, unknown> | null;
+            deltasVsBaseline?: Record<string, unknown> | null;
+          };
+
+          const label = typeof r.label === "string" ? r.label : "";
+          const metricId = typeof r.metricId === "string" ? r.metricId : "";
+          const kind = toKind(r.kind);
 
           return (
             <div
@@ -85,19 +122,34 @@ export function CompareTable({ view, money, pct }: Props) {
               }}
             >
               <div style={{ color: "#111827", fontWeight: 600 }}>
-                {row.label}
-                <span style={{ color: "#9ca3af", fontSize: 12, marginLeft: 6 }}>{row.metricId}</span>
+                {label}
+                <span style={{ color: "#9ca3af", fontSize: 12, marginLeft: 6 }}>
+                  {metricId}
+                </span>
               </div>
 
               {slots.map((s: string) => (
-                <div key={s} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                  {cell(row.values?.[s], row.kind)}
+                <div
+                  key={s}
+                  style={{
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {cell(r.values?.[s], kind)}
                 </div>
               ))}
 
               {deltaSlots.map((s: string) => (
-                <div key={`d-${s}`} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#374151" }}>
-                  {deltaCell(row.deltasVsBaseline?.[s], row.kind)}
+                <div
+                  key={`d-${s}`}
+                  style={{
+                    textAlign: "right",
+                    fontVariantNumeric: "tabular-nums",
+                    color: "#374151",
+                  }}
+                >
+                  {deltaCell(r.deltasVsBaseline?.[s], kind)}
                 </div>
               ))}
             </div>

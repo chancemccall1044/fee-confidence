@@ -201,7 +201,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
   const canAddC = slots.includes("B") && !slots.includes("C");
 
   const onAddScenario = () => {
-    if (!!nameError) return; // keep: disabled when nameError exists
+    if (nameError) return;
     if (canAddB) return addSlot("B");
     if (canAddC) return addSlot("C");
   };
@@ -343,7 +343,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 <button
                   type="button"
                   onClick={() => addSlot("B")}
-                  disabled={!!nameError}
+                  disabled={Boolean(nameError)}
                   className={[
                     "h-9 px-3 rounded-md border text-sm font-semibold transition-colors",
                     "border-foreground bg-background text-foreground hover:bg-accent",
@@ -358,7 +358,7 @@ function AuthedApp({ who, onLogout }: { who: string; onLogout: () => void }) {
                 <button
                   type="button"
                   onClick={() => addSlot("C")}
-                  disabled={!!nameError}
+                  disabled={Boolean(nameError)}
                   className={[
                     "h-9 px-3 rounded-md border text-sm font-semibold transition-colors",
                     "border-foreground bg-background text-foreground hover:bg-accent",

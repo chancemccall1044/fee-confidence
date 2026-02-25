@@ -66,9 +66,11 @@ export function useScenarioSet(initial: {
   ]);
 
   // Keep "who" in sync (do not overwrite scenario edits)
-  useEffect(() => {
-    setEnvelopes((prev) => prev.map((e) => ({ ...e, who })));
-  }, [who]);
+useEffect(() => {
+  // Intentional: keep "who" in sync without overwriting scenario edits.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  setEnvelopes((prev) => prev.map((e) => ({ ...e, who })));
+}, [who]);
 
   const slots = useMemo(() => envelopes.map((e) => e.slot), [envelopes]);
 

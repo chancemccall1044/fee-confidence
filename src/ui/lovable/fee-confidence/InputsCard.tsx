@@ -1,4 +1,3 @@
-import { useId } from "react";
 import CodeTag from "./CodeTag";
 import type { InputField } from "./types";
 
@@ -12,7 +11,8 @@ const InputsCard = ({ fields, onAddScenario, onImport }: InputsCardProps) => (
   <div className="fc-card-secondary flex flex-col gap-4">
     <div className="grid gap-3">
       {fields.map((field) => {
-        const inputId = `input-${field.code}-${useId()}`;
+        const safeCode = (field.code ?? field.label).replace(/\s+/g, "-").toLowerCase();
+        const inputId = `fc-input-${safeCode}`;
         const errorId = `${inputId}-error`;
 
         return (
