@@ -6,9 +6,16 @@ interface FeeAnalysisCardProps {
 }
 
 const fmt = (v: number) =>
-  v.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+  Number.isFinite(v)
+    ? v.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "—";
 
-const pct = (v: number) => `${v.toFixed(2)}%`;
+const pct = (v: number) => (Number.isFinite(v) ? `${v.toFixed(2)}%` : "—");
 
 const FeeAnalysisCard = ({ data }: FeeAnalysisCardProps) => {
   const rows = [
@@ -21,6 +28,7 @@ const FeeAnalysisCard = ({ data }: FeeAnalysisCardProps) => {
   return (
     <div className="fc-card-elevated">
       <h3 className="fc-section-title mb-4">Fee Analysis</h3>
+
       <div className="grid gap-2">
         {rows.map((row) => (
           <div
@@ -35,7 +43,7 @@ const FeeAnalysisCard = ({ data }: FeeAnalysisCardProps) => {
           </div>
         ))}
       </div>
-      {/* Effective margin emphasis band */}
+
       <div className="mt-4 rounded-md bg-secondary px-5 py-4 flex items-center justify-between border border-border">
         <div className="flex items-center gap-2">
           <CodeTag>EM</CodeTag>

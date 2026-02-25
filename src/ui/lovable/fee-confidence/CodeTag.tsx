@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 interface CodeTagProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 const CodeTag = ({ children }: CodeTagProps) => (

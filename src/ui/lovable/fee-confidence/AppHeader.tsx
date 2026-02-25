@@ -18,7 +18,7 @@ const AppHeader = ({ title, subtitle, modelBadge, onLogOut }: AppHeaderProps) =>
         <button
           type="button"
           onClick={onLogOut}
-          className="h-8 px-3 rounded-md border border-input bg-background text-xs font-semibold text-foreground hover:bg-accent transition-colors"
+          className="h-8 px-3 rounded-md border border-input bg-background text-xs font-semibold text-foreground hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
           Log Out
         </button>

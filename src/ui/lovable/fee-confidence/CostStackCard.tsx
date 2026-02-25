@@ -8,9 +8,16 @@ interface CostStackCardProps {
 }
 
 const fmt = (v: number) =>
-  v.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 });
+  Number.isFinite(v)
+    ? v.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "—";
 
-const pct = (v: number) => `${v.toFixed(1)}%`;
+const pct = (v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "—");
 
 const CostStackCard = ({
   rows,
@@ -19,6 +26,7 @@ const CostStackCard = ({
 }: CostStackCardProps) => (
   <div className="fc-card-elevated">
     <h3 className="fc-section-title mb-4">Cost Stack</h3>
+
     <div className="grid gap-0.5">
       {rows.map((row) => (
         <div
@@ -29,6 +37,7 @@ const CostStackCard = ({
             <CodeTag>{row.code}</CodeTag>
             <span className="fc-label truncate">{row.label}</span>
           </div>
+
           <div className="flex items-center gap-4 shrink-0">
             {row.percentage !== undefined && (
               <span className="text-xs text-muted-foreground tabular-nums w-14 text-right font-mono">
@@ -40,7 +49,7 @@ const CostStackCard = ({
         </div>
       ))}
     </div>
-    {/* Total row */}
+
     <div className="mt-3 pt-3 border-t-2 border-foreground/20 flex items-center justify-between">
       <span className="text-sm font-semibold text-foreground">{totalLabel}</span>
       <span className="fc-value w-28 text-foreground">{fmt(totalValue)}</span>

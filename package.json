@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ui:alias-check": "powershell -Command \"if (Get-ChildItem -Recurse src/ui/lovable/fee-confidence -Include *.ts,*.tsx | Select-String '@/') { Write-Host '❌ Alias imports found in lovable UI'; exit 1 } else { Write-Host '✅ No alias imports in lovable UI' }\""
   },
   "dependencies": {
     "lucide-react": "^0.575.0",

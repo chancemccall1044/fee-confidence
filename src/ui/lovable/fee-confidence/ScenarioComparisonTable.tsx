@@ -28,21 +28,38 @@ const fmtDeltaPct2 = (v: number) => {
 
 type Format = "currency" | "percent" | "percent2";
 
+const assertNever = (x: never): never => {
+  throw new Error(`Unexpected format: ${String(x)}`);
+};
+
 const formatValue = (v: number, fmt: Format) => {
   switch (fmt) {
-    case "currency": return fmtCurrency(v);
-    case "percent": return fmtPct1(v);
-    case "percent2": return fmtPct2(v);
+    case "currency":
+      return fmtCurrency(v);
+    case "percent":
+      return fmtPct1(v);
+    case "percent2":
+      return fmtPct2(v);
+    default:
+      return assertNever(fmt);
   }
 };
 
 const formatDelta = (v: number, fmt: Format) => {
   switch (fmt) {
-    case "currency": return fmtDeltaCurrency(v);
-    case "percent": return fmtDeltaPct1(v);
-    case "percent2": return fmtDeltaPct2(v);
+    case "currency":
+      return fmtDeltaCurrency(v);
+    case "percent":
+      return fmtDeltaPct1(v);
+    case "percent2":
+      return fmtDeltaPct2(v);
+    default:
+      return assertNever(fmt);
   }
 };
+
+const isFiniteNumber = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -89,15 +106,13 @@ const ScenarioComparisonTable = ({
               <span className="fc-section-title">Metric</span>
             </th>
             {scenarios.map((s, i) => (
-              <th
-                key={i}
-                className="text-right py-2 px-3 min-w-[140px]"
-              >
+              <th key={i} className="text-right py-2 px-3 min-w-[140px]">
                 <span className="fc-section-title">{s.name}</span>
               </th>
             ))}
           </tr>
         </thead>
+
         <tbody>
           {rows.map((row, ri) => {
             if (row.isHeader) {
@@ -113,8 +128,8 @@ const ScenarioComparisonTable = ({
               );
             }
 
-            const isPrimary = row.isPrimary;
-            const isTotal = row.isTotal;
+            const isPrimary = !!row.isPrimary;
+            const isTotal = !!row.isTotal;
 
             return (
               <tr
@@ -122,11 +137,15 @@ const ScenarioComparisonTable = ({
                 className={`
                   border-b border-border last:border-0
                   ${isPrimary ? "bg-primary/8 border-l-[3px] border-l-primary" : ""}
-                   ${isTotal ? "border-t-2 border-t-foreground/15" : ""}
+                  ${isTotal ? "border-t-2 border-t-foreground/15" : ""}
                 `}
               >
                 {/* Label cell */}
-                <td className={`py-1.5 pr-4 align-top ${isPrimary ? "py-3" : ""}`}>
+                <td
+                  className={`py-1.5 pr-4 align-top ${
+                    isPrimary ? "py-3" : ""
+                  }`}
+                >
                   <div className="flex items-center gap-2">
                     {row.code && <CodeTag>{row.code}</CodeTag>}
                     <div className="min-w-0">
@@ -150,16 +169,21 @@ const ScenarioComparisonTable = ({
 
                 {/* Value cells */}
                 {scenarios.map((scenario, si) => {
-                  const value = scenario.values[row.key];
-                  const delta = deltas[si]?.[row.key];
+                  const rawValue = scenario.values[row.key];
+                  const rawDelta = deltas[si]?.[row.key];
                   const isBaseline = si === 0;
+
+                  const value = isFiniteNumber(rawValue) ? rawValue : null;
+                  const delta = isFiniteNumber(rawDelta) ? rawDelta : null;
 
                   return (
                     <td
-                       key={si}
-                       className={`text-right px-3 align-top ${isPrimary ? "py-3" : "py-1.5"}`}
-                     >
-                       <span
+                      key={si}
+                      className={`text-right px-3 align-top ${
+                        isPrimary ? "py-3" : "py-1.5"
+                      }`}
+                    >
+                      <span
                         className={`block tabular-nums ${
                           isPrimary
                             ? "text-lg font-extrabold text-foreground"
@@ -168,9 +192,10 @@ const ScenarioComparisonTable = ({
                               : "fc-value text-sm"
                         }`}
                       >
-                        {value !== undefined ? formatValue(value, row.format) : "—"}
+                        {value !== null ? formatValue(value, row.format) : "—"}
                       </span>
-                      {!isBaseline && delta !== undefined && delta !== null && (
+
+                      {!isBaseline && delta !== null && (
                         <span
                           className={`block text-xs tabular-nums font-mono mt-0.5 ${
                             delta > 0
