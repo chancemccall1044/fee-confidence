@@ -1,4 +1,8 @@
-# React + TypeScript + Vite
+# Fee Confidence
+
+See the [short user guide](USER_GUIDE.md) for an overview of the app and step-by-step usage.
+
+## Developer setup
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
